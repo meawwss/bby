@@ -73,7 +73,7 @@
 <body>
 
 <h1>🎵 Connexion Spotify</h1>
-<p class="sub">Génère le code d'accès pour ton widget "musique en cours". À faire une seule fois.</p>
+<p class="sub">Génère le code d'accès</p>
 
 <!-- ÉTAPE 1 -->
 <div id="step1" class="step active">
@@ -191,7 +191,7 @@ function showResult(ok, content, clientId) {
   const el = document.getElementById("result");
   if (ok) {
     el.innerHTML = `
-      <p class="ok">✅ Connexion réussie ! Copie ces deux valeurs dans les Fields du widget StreamElements :</p>
+      <p class="ok">Connexion réussie ! ✅ Copie ces deux valeurs dans les Fields du widget StreamElements :</p>
       <label>Client ID</label>
       <div class="box" id="ci">${clientId}</div>
       <button class="copy-btn" onclick="copyText('${clientId}')">Copier le Client ID</button>
