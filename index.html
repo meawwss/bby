@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Connexion Spotify — Widget Musique</title>
+<title>Autorisation Spotify pour le Widget</title>
 <style>
   * { box-sizing: border-box; }
   body {
@@ -73,7 +73,7 @@
 <body>
 
 <h1>🎵 Connexion Spotify</h1>
-<p class="sub">Génère le code d'accès</p>
+<p class="sub">Génère les code d'accès pour le widget. (À faire une seule fois)</p>
 
 <!-- ÉTAPE 1 -->
 <div id="step1" class="step active">
@@ -191,7 +191,7 @@ function showResult(ok, content, clientId) {
   const el = document.getElementById("result");
   if (ok) {
     el.innerHTML = `
-      <p class="ok">Connexion réussie ! ✅ Copie ces deux valeurs dans les Fields du widget StreamElements :</p>
+      <p class="ok">✅ Connexion réussie ! Copie ces deux valeurs dans les Fields du widget StreamElements :</p>
       <label>Client ID</label>
       <div class="box" id="ci">${clientId}</div>
       <button class="copy-btn" onclick="copyText('${clientId}')">Copier le Client ID</button>
