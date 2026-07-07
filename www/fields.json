@@ -1,0 +1,178 @@
+{
+  "spotifyClientId": {
+    "type": "text",
+    "label": "Spotify Client ID (via la page de connexion)",
+    "value": ""
+  },
+  "spotifyRefreshToken": {
+    "type": "text",
+    "label": "Spotify Refresh Token (via la page de connexion)",
+    "value": ""
+  },
+  "refreshSeconds": {
+    "type": "number",
+    "label": "Fréquence de vérification (secondes) — 3 à 5 conseillé",
+    "value": 4
+  },
+  "enableAppear": {
+    "type": "dropdown",
+    "label": "✨ Animation d'apparition (étoiles) quand un son démarre",
+    "value": "true",
+    "options": {
+      "true": "Oui",
+      "false": "Non"
+    }
+  },
+  "enableDisappear": {
+    "type": "dropdown",
+    "label": "✨ Disparition (étoiles) + masquage quand rien ne joue",
+    "value": "true",
+    "options": {
+      "true": "Oui",
+      "false": "Non"
+    }
+  },
+  "enableAmbient": {
+    "type": "dropdown",
+    "label": "✨ Étoiles ambiantes pendant la lecture",
+    "value": "true",
+    "options": {
+      "true": "Oui",
+      "false": "Non"
+    }
+  },
+  "hideDelaySeconds": {
+    "type": "number",
+    "label": "Délai avant disparition quand rien ne joue (secondes)",
+    "value": 20
+  },
+  "showLastTrack": {
+    "type": "dropdown",
+    "label": "Afficher le dernier son pendant le délai (sinon 'aucune musique')",
+    "value": "true",
+    "options": {
+      "true": "Oui",
+      "false": "Non"
+    }
+  },
+  "placeholderTitle": {
+    "type": "text",
+    "label": "Titre affiché si aucun son",
+    "value": "Aucune musique"
+  },
+  "placeholderArtist": {
+    "type": "text",
+    "label": "Artiste affiché si aucun son",
+    "value": "—"
+  },
+  "cardWidth": {
+    "type": "number",
+    "label": "Largeur de la pilule (px)",
+    "value": 426
+  },
+  "cardGap": {
+    "type": "number",
+    "label": "Espacement entre éléments (px)",
+    "value": 12
+  },
+  "titleZoneWidth": {
+    "type": "number",
+    "label": "Largeur zone titre (px)",
+    "value": 155
+  },
+  "artistZoneWidth": {
+    "type": "number",
+    "label": "Largeur zone artiste (px)",
+    "value": 100
+  },
+  "cardBgColor": {
+    "type": "colorpicker",
+    "label": "Couleur de fond de la pilule",
+    "value": "#adadad"
+  },
+  "cardBgOpacity": {
+    "type": "number",
+    "label": "Opacité du fond (0 à 1)",
+    "value": 0.62
+  },
+  "cardBlur": {
+    "type": "number",
+    "label": "Intensité du flou (px)",
+    "value": 14
+  },
+  "borderColor": {
+    "type": "colorpicker",
+    "label": "Couleur de la bordure",
+    "value": "#000000"
+  },
+  "borderOpacity": {
+    "type": "number",
+    "label": "Opacité de la bordure (0 à 1)",
+    "value": 0.8
+  },
+  "borderWidth": {
+    "type": "number",
+    "label": "Épaisseur de la bordure (px)",
+    "value": 4
+  },
+  "cardRadius": {
+    "type": "number",
+    "label": "Arrondi des coins (px)",
+    "value": 10
+  },
+  "playColor": {
+    "type": "colorpicker",
+    "label": "Couleur de l'icône lecture",
+    "value": "#24201c"
+  },
+  "iconSize": {
+    "type": "number",
+    "label": "Taille de l'icône musique (px)",
+    "value": 18
+  },
+  "iconGlow": {
+    "type": "number",
+    "label": "Intensité du halo de l'icône (px, 0 = aucun)",
+    "value": 2
+  },
+  "titleColor": {
+    "type": "colorpicker",
+    "label": "Couleur du titre",
+    "value": "#191919"
+  },
+  "artistColor": {
+    "type": "colorpicker",
+    "label": "Couleur de l'artiste",
+    "value": "#191919"
+  },
+  "textStrokeColor": {
+    "type": "colorpicker",
+    "label": "Couleur du contour du texte",
+    "value": "#ffffff"
+  },
+  "titleSize": {
+    "type": "number",
+    "label": "Taille du titre (px)",
+    "value": 14
+  },
+  "artistSize": {
+    "type": "number",
+    "label": "Taille de l'artiste (px)",
+    "value": 14
+  },
+  "titleStrokeWidth": {
+    "type": "number",
+    "label": "Épaisseur contour titre (px)",
+    "value": 1.2
+  },
+  "artistStrokeWidth": {
+    "type": "number",
+    "label": "Épaisseur contour artiste (px)",
+    "value": 1.2
+  },
+  "dividerColor": {
+    "type": "colorpicker",
+    "label": "Couleur des 3 points",
+    "value": "#eaf2ff"
+  }
+}
