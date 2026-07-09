@@ -686,7 +686,7 @@ window.addEventListener('onWidgetLoad', function (obj) {
     st.durationMs = 22000;
     st.anchorMs = 0;
     st.anchorAt = Date.now();
-    renderTrack('Blinding Lights', 'The Weeknds');
+    renderTrack('Blinding Lights', 'The Weeknd');
     ensureRenderLoop();
     setIdle(false);
     appear();
