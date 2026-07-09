@@ -1,0 +1,348 @@
+/* ===== BODY (fond transparent obligatoire pour OBS) ===== */
+body {
+  margin: 0;
+  background: transparent;
+  font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ===== VARIABLES (pilotées par les Fields) ===== */
+:root {
+  --np-card-width: 400px;
+  --np-gap: 8px;
+  --np-title-zone: 155px;
+  --np-artist-zone: 100px;
+  --np-card-bg: rgba(94, 63, 59, 0.9);
+  --np-border-color: rgba(42, 28, 27, 0.5);
+  --np-border-width: 0px;
+  --np-radius: 13px;
+  --np-card-shadow: 0 4px 16px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 240, 236, 0.06);
+
+  --np-play-color: #a88b86;
+  --np-icon-size: 18px;
+  --np-icon-glow: 0px;
+  --np-icon-glow-color: rgba(168, 139, 134, 0.95);
+  --np-title-color: #ac8a86;
+  --np-artist-color: #ac8a86;
+  --np-text-stroke: rgba(52, 33, 31, 0.95);
+
+  --np-title-size: 13px;
+  --np-artist-size: 12px;
+  --np-title-outline: 0 1px 1.5px rgba(0,0,0,0.28);
+  --np-artist-outline: 0 1px 1.5px rgba(0,0,0,0.22);
+
+  --np-divider-color: #a88b86;
+  --np-progress-track: rgba(42, 28, 27, 0.35);
+
+  /* --- Étoile centrale (défaut = DA brun-mauve / taupe rosé, doux) --- */
+  --np-star-size: 11px;
+  --np-star-border-color: #6e514e;
+  --np-star-gradient: radial-gradient(
+    circle,
+    #d3b4af 0%,
+    #c6a29c 35%,
+    #bd9791 70%,
+    #a5837e 100%
+  );
+  --np-star-glow:
+    0 0 5px rgba(143, 107, 103, 0.65),
+    0 0 9px rgba(143, 107, 103, 0.45),
+    0 0 13px rgba(143, 107, 103, 0.25);
+  --np-star-outer: radial-gradient(
+    circle,
+    rgba(143, 107, 103, 0.7) 0%,
+    rgba(143, 107, 103, 0.18) 25%,
+    transparent 70%
+  );
+  --np-star-pulse-speed: 4.5s;
+  --np-star-pulse-scale: 1.12;
+
+  /* --- Barre de progression (remplissage + bout), doux --- */
+  --np-progress-width: 36px;
+  --np-progress-fill: linear-gradient(90deg, #a88b86, #bd9c96, #a88b86);
+  --np-tip-size: 4.5px;
+  --np-tip-color: #c9a9a3;
+  --np-tip-glow: 0 0 5px rgba(201, 169, 163, 0.85), 0 0 10px rgba(143, 107, 103, 0.5);
+}
+
+/* ===== ROOT (contexte de positionnement, laisse dépasser la couche burst) ===== */
+.np-root {
+  position: relative;
+  display: inline-block;
+}
+
+/* ===== CARD (boîte visuelle : fond, ombre douce) ===== */
+.np-card {
+  position: relative;
+  width: var(--np-card-width);
+  height: 42px;
+  box-sizing: border-box;
+
+  border-radius: var(--np-radius);
+
+  /* Fond translucide teinté. PAS de backdrop-filter : dans une source
+     navigateur OBS, il n'a pas accès aux pixels du stream et rend un voile
+     GRIS sur fond transparent. La transparence sur le stream se règle via
+     l'opacité de la couleur. Pour un vrai flou du fond : filtre "Flou" sur
+     une source dans OBS. */
+  background: var(--np-card-bg);
+
+  border: var(--np-border-width) solid var(--np-border-color);
+
+  /* Profondeur douce (look moderne) : ombre portée floue pour détacher la
+     pilule du stream + fin reflet interne en haut (sheen "glass").
+     box-shadow fonctionne bien dans OBS (≠ backdrop-filter). */
+  box-shadow: var(--np-card-shadow);
+
+  /* overflow VISIBLE volontairement : préserve les halos de l'étoile et du sparkle */
+}
+
+/* ===== CONTENT (le vrai conteneur flex du contenu) ===== */
+.np-content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: 100%;
+  padding: 0 14px;
+  gap: var(--np-gap);
+  box-sizing: border-box;
+}
+
+/* ===== COUCHES D'ÉTOILES ===== */
+.np-fx-ambient {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  border-radius: var(--np-radius);
+  pointer-events: none;
+}
+
+.np-fx-burst {
+  position: absolute;
+  inset: -7px;
+  z-index: 5;
+  overflow: hidden;
+  border-radius: calc(var(--np-radius) + 5px);
+  pointer-events: none;
+}
+
+.np-fx-dot {
+  position: absolute;
+  border-radius: 50%;
+  background: #ffffff; /* surchargé en JS par la couleur choisie */
+  pointer-events: none;
+  will-change: transform, opacity;
+}
+.np-fx-spk {
+  position: absolute;
+  pointer-events: none;
+  will-change: transform, opacity;
+}
+
+/* ===== APPARITION / DISPARITION de la carte ===== */
+.np-card.np-hidden {
+  opacity: 0;
+}
+.np-card.np-appearing {
+  animation: npCardIn 1.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+.np-card.np-disappearing {
+  animation: npCardOut 1.7s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+@keyframes npCardIn {
+  0%   { opacity: 0; transform: scale(0.975); }
+  45%  { opacity: 0.5; }
+  100% { opacity: 1; transform: scale(1); }
+}
+@keyframes npCardOut {
+  0%   { opacity: 1; transform: scale(1); }
+  55%  { opacity: 0.5; }
+  100% { opacity: 0; transform: scale(0.975); }
+}
+
+/* ===== ÉTAT VEILLE (aucune musique) : l'étoile s'éteint en douceur ===== */
+.np-card.np-idle .np-star-sep {
+  animation: none;
+  filter: grayscale(1) brightness(0.85);
+}
+
+.np-card.np-idle .np-star-sep::before {
+  box-shadow:
+    0 0 5px rgba(143, 107, 103, 0),
+    0 0 9px rgba(143, 107, 103, 0),
+    0 0 13px rgba(143, 107, 103, 0);
+}
+
+.np-card.np-idle .np-star-sep::after {
+  opacity: 0;
+}
+
+/* ===== PLAY ICON ===== */
+.np-play-icon {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--np-play-color);
+}
+
+.np-play-icon svg {
+  display: block;
+  width: var(--np-icon-size);
+  height: var(--np-icon-size);
+  filter: drop-shadow(0 0 var(--np-icon-glow) var(--np-icon-glow-color))
+          drop-shadow(0 0 var(--np-icon-glow) var(--np-icon-glow-color));
+}
+
+/* ===== TITLE / ARTIST ZONES ===== */
+.np-title-wrap {
+  flex: 0 0 var(--np-title-zone);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.np-artist-wrap {
+  flex: 0 0 var(--np-artist-zone);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+/* Texte trop long qui défile : alignement gauche pour lire depuis le début. */
+.np-title-wrap.np-scrolling,
+.np-artist-wrap.np-scrolling {
+  justify-content: flex-start;
+}
+
+.np-marquee-text {
+  flex: 0 0 auto;
+  display: inline-block;
+  white-space: nowrap;
+  will-change: transform;
+  padding: 4px 3px;
+}
+
+/* ===== TEXT COLORS ===== */
+#np-title {
+  color: var(--np-title-color);
+  font-size: var(--np-title-size);
+  font-weight: 700;
+  text-shadow: var(--np-title-outline);
+}
+
+#np-artist {
+  color: var(--np-artist-color);
+  font-size: var(--np-artist-size);
+  font-weight: 500;
+  text-shadow: var(--np-artist-outline);
+}
+
+/* ===== DIVIDER (3 points, entre artiste et barre) ===== */
+.np-divider {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.np-divider span {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background-color: var(--np-divider-color);
+}
+
+/* ===== PROGRESS ===== */
+.np-progress-track {
+  flex: 0 0 auto;
+  width: var(--np-progress-width);
+  height: 3px;
+  border-radius: 999px;
+  background: var(--np-progress-track);
+  position: relative;
+  /* pas d'overflow:hidden : le remplissage est arrondi par lui-même et
+     le repère de bout (halo) doit pouvoir déborder proprement. */
+}
+
+.np-progress-bar {
+  height: 100%;
+  width: 0%;
+  position: relative;
+  border-radius: 999px;
+
+  background: var(--np-progress-fill);
+
+  box-shadow: inset 0 0 6px rgba(255, 255, 255, 0.25);
+}
+
+/* ===== TIP (repère précis au bout de la barre) ===== */
+.np-sparkle {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translate(50%, -50%);
+
+  width: var(--np-tip-size);
+  height: var(--np-tip-size);
+
+  border-radius: 50%;
+  background: var(--np-tip-color);
+  box-shadow: var(--np-tip-glow);
+}
+
+/* ===== STAR SEP (étoile animée, entre titre et artiste) ===== */
+.np-star-sep {
+  flex: 0 0 auto;
+  width: var(--np-star-size);
+  height: var(--np-star-size);
+  position: relative;
+  border: 0.8px outset var(--np-star-border-color);
+  transform: rotate(45deg);
+  filter: grayscale(0) brightness(1);
+  animation: starGlow var(--np-star-pulse-speed) infinite ease-in-out;
+  transition: filter 0.8s ease, transform 0.8s ease;
+}
+
+.np-star-sep::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+
+  background: var(--np-star-gradient);
+
+  border-radius: 2px;
+
+  box-shadow: var(--np-star-glow);
+
+  transition: box-shadow 0.8s ease;
+}
+
+.np-star-sep::after {
+  content: "";
+  position: absolute;
+  inset: -6px;
+
+  background: var(--np-star-outer);
+
+  opacity: 0.6;
+  filter: blur(1px);
+  transition: opacity 0.8s ease;
+}
+
+@keyframes starGlow {
+  0%, 100% {
+    transform: rotate(45deg) scale(1);
+  }
+  50% {
+    transform: rotate(45deg) scale(var(--np-star-pulse-scale));
+  }
+}
