@@ -68,19 +68,20 @@
   label { font-size: 13px; color: #aaa; font-weight: 600; }
   .hint { font-size: 13px; color: #888; margin-top: -8px; }
   .card { background:#181818; border-radius:12px; padding:20px; margin-top:16px; }
+  .security { background:#181818; border:1px solid #2a2a2a; border-radius:10px; padding:12px 16px; font-size:13px; color:#9a9a9a; margin-top:14px; }
 </style>
 </head>
 <body>
 
 <h1>🎵 Connexion Spotify</h1>
-<p class="sub">Génère les code d'accès pour le widget. À faire une seule fois</p>
+<p class="sub">Génère les codes d'accès pour le widget. À faire une seule fois.</p>
 
 <!-- ÉTAPE 1 -->
 <div id="step1" class="step active">
   <div class="card">
     <h2>Étape 1 — Créer l'app Spotify</h2>
     <ol>
-      <li>Va sur <a href="https://developer.spotify.com/dashboard" target="_blank" style="color:#1db954">developer.spotify.com/dashboard</a> et connecte-toi.</li>
+      <li>Va sur <a href="https://developer.spotify.com/dashboard" target="_blank" rel="noopener noreferrer" style="color:#1db954">developer.spotify.com/dashboard</a> et connecte-toi.</li>
       <li>Clique <strong>Create app</strong>. Mets un nom au choix (ex: "Mon widget"), coche <strong>Web API</strong>.</li>
       <li>Dans <strong>Redirect URIs</strong>, colle <u>exactement</u> ceci :
         <div class="box" id="redirect-uri-display"></div>
@@ -133,9 +134,13 @@ async function startAuth() {
   if (!clientId) { document.getElementById("err1").textContent = "Colle ton Client ID d'abord."; return; }
 
   const verifier = randomString(64);
+  const state = randomString(32);
   const challenge = base64url(await sha256(verifier));
-  localStorage.setItem("pkce_verifier", verifier);
-  localStorage.setItem("client_id", clientId);
+
+  // sessionStorage : purgé à la fermeture de l'onglet (contrairement à localStorage).
+  sessionStorage.setItem("pkce_verifier", verifier);
+  sessionStorage.setItem("oauth_state", state);
+  sessionStorage.setItem("client_id", clientId);
 
   const params = new URLSearchParams({
     client_id: clientId,
@@ -144,6 +149,7 @@ async function startAuth() {
     scope: SCOPES,
     code_challenge_method: "S256",
     code_challenge: challenge,
+    state: state,
   });
   window.location.href = AUTH_ENDPOINT + "?" + params.toString();
 }
@@ -152,14 +158,29 @@ async function handleRedirect() {
   const params = new URLSearchParams(window.location.search);
   const code = params.get("code");
   const error = params.get("error");
+  const returnedState = params.get("state");
+
+  if (!code && !error) return;
+
+  // NETTOYAGE IMMÉDIAT de l'URL : le code (à usage unique, protégé PKCE)
+  // ne reste ni dans la barre d'adresse ni dans l'historique.
+  window.history.replaceState({}, document.title, REDIRECT_URI);
+
   if (error) { showStep2(); showResult(false, "Autorisation refusée : " + error); return; }
-  if (!code) return;
+
+  // Vérification anti-CSRF : le state doit correspondre à celui émis par CET onglet.
+  const expectedState = sessionStorage.getItem("oauth_state");
+  if (!expectedState || returnedState !== expectedState) {
+    showStep2();
+    showResult(false, "Vérification de sécurité échouée (state invalide). Relance la connexion depuis cette page.");
+    return;
+  }
 
   showStep2();
   document.getElementById("result").innerHTML = "<p>⏳ Échange en cours...</p>";
 
-  const verifier = localStorage.getItem("pkce_verifier");
-  const clientId = localStorage.getItem("client_id");
+  const verifier = sessionStorage.getItem("pkce_verifier");
+  const clientId = sessionStorage.getItem("client_id");
 
   try {
     const res = await fetch(TOKEN_ENDPOINT, {
@@ -178,8 +199,12 @@ async function handleRedirect() {
     else showResult(false, "Réponse Spotify : " + JSON.stringify(data));
   } catch (e) {
     showResult(false, "Erreur réseau : " + e.message);
+  } finally {
+    // Le verifier et le state sont à usage unique : on les efface aussitôt.
+    sessionStorage.removeItem("pkce_verifier");
+    sessionStorage.removeItem("oauth_state");
+    sessionStorage.removeItem("client_id");
   }
-  window.history.replaceState({}, document.title, REDIRECT_URI);
 }
 
 function showStep2() {
@@ -193,22 +218,35 @@ function showResult(ok, content, clientId) {
     el.innerHTML = `
       <p class="ok">✅ Connexion réussie ! Copie ces deux valeurs dans les Fields du widget StreamElements :</p>
       <label>Client ID</label>
-      <div class="box" id="ci">${clientId}</div>
-      <button class="copy-btn" onclick="copyText('${clientId}')">Copier le Client ID</button>
+      <div class="box" id="ci"></div>
+      <button class="copy-btn" onclick="copyFrom('ci')">Copier le Client ID</button>
       <label style="display:block; margin-top:16px;">Refresh Token</label>
-      <div class="box" id="rt">${content}</div>
-      <button class="copy-btn" onclick="copyText('${content}')">Copier le Refresh Token</button>
-      <p class="hint" style="margin-top:20px;">🔒 Garde ces valeurs privées, ne partage pas cette page ni l'URL de ton overlay publiquement.</p>
+      <div class="box" id="rt"></div>
+      <button class="copy-btn" onclick="copyFrom('rt')">Copier le Refresh Token</button>
+      <p class="hint" style="margin-top:20px;">🔒 Garde ces valeurs privées, ne partage pas l'URL de ton overlay publiquement.</p>
+      <div class="security">
+        Bon à savoir : ce widget n'a que des droits de <b>lecture</b> (morceau en cours).
+        Personne ne peut contrôler ta musique ou ton compte avec ce token.
+        Et en cas de doute, tu peux révoquer l'accès à tout moment sur
+        <a href="https://www.spotify.com/account/apps/" target="_blank" rel="noopener noreferrer" style="color:#1db954">spotify.com/account/apps</a>
+        — le token devient instantanément inutilisable.
+      </div>
     `;
+    // Injection en textContent (jamais dans du HTML/attribut) : sûr quel que soit le contenu.
+    document.getElementById("ci").textContent = clientId;
+    document.getElementById("rt").textContent = content;
   } else {
-    el.innerHTML = `<p class="err">❌ ${content}</p>
+    el.innerHTML = `<p class="err">❌ </p>
       <p class="hint">Vérifie que la Redirect URI dans le dashboard Spotify correspond EXACTEMENT à :</p>
-      <div class="box">${REDIRECT_URI}</div>
+      <div class="box"></div>
       <button class="copy-btn" onclick="location.href=REDIRECT_URI">Réessayer</button>`;
+    el.querySelector(".err").textContent = "❌ " + content;
+    el.querySelector(".box").textContent = REDIRECT_URI;
   }
 }
 
-function copyText(t) {
+function copyFrom(id) {
+  const t = document.getElementById(id).textContent;
   navigator.clipboard.writeText(t).then(() => alert("Copié !"));
 }
 
