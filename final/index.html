@@ -1,0 +1,39 @@
+<div class="np-root">
+  <div id="now-playing-card" class="np-card np-hidden">
+    <!-- Couche étoiles ambiantes (derrière le contenu, clippée à la pilule, JAMAIS sur la zone texte) -->
+    <div class="np-fx-ambient" id="np-fx-ambient"></div>
+    <!-- Contenu de la pilule : 32px | icône | 13px | [titre 12px ★ 12px artiste] | 12px min | barre 80×8 | 32px -->
+    <div class="np-content">
+      <div class="np-play-icon">
+        <svg viewBox="1.5 0 24 24">
+          <path d="M9 18V5l11-2v13"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"/>
+          <circle cx="7" cy="18" r="3" fill="currentColor"/>
+          <circle cx="20" cy="16" r="3" fill="currentColor"/>
+        </svg>
+      </div>
+      <!-- Zone flexible : le bloc entier défile comme une seule unité -->
+      <div class="np-track-zone" id="np-track-zone">
+        <div class="np-track-block" id="np-track-block">
+          <span id="np-title" class="np-title">Blinding Lights</span>
+          <div class="np-star-sep"></div>
+          <span id="np-artist" class="np-artist">The Weeknd</span>
+        </div>
+      </div>
+      <!-- Séparateur 3 points (couleur de la barre), 12px de marge de chaque côté -->
+      <div class="np-divider" id="np-divider">
+        <span></span><span></span><span></span>
+      </div>
+      <!-- Barre de progression : rainure + remplissage plat à bout biseauté -->
+      <div class="np-progress-track" id="np-progress-track">
+        <div id="np-progress-bar" class="np-progress-bar"></div>
+      </div>
+    </div>
+  </div>
+  <!-- Couche étoiles apparition/disparition (au-dessus, hors carte pour survivre au fondu) -->
+  <div class="np-fx-burst" id="np-fx-burst"></div>
+</div>

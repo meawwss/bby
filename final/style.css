@@ -1,0 +1,355 @@
+/* ===== BODY (fond transparent obligatoire pour OBS) ===== */
+body {
+  margin: 0;
+  background: transparent;
+  font-family: var(--np-font, "Quicksand"), "Trebuchet MS", "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ===== VARIABLES (pilotées par les Fields) =====
+   DA "nuit lavande" : fond encre #16151e légèrement translucide,
+   titre jaune pâle, artiste lavande grisé, accents lilas. */
+:root {
+  --np-card-width: 400px;
+  --np-card-height: 38px;
+  --np-side-margin: 32px;      /* marge gauche/droite à l'intérieur de la pilule */
+  --np-icon-gap: 13px;         /* icône -> bloc texte */
+  --np-block-gap: 12px;        /* titre -> étoile -> artiste */
+  --np-text-bar-gap: 12px;     /* marge MINIMALE bloc texte -> barre */
+  --np-card-bg: rgba(22, 21, 30, 0.85);
+  --np-border-color: rgba(55, 55, 83, 0.5);
+  --np-border-width: 0px;
+  --np-radius: 19px;
+  --np-card-shadow: 0 4px 16px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(236, 236, 255, 0.05);
+
+  --np-play-color: #f7e9a1;
+  --np-icon-size: 11px;
+  --np-icon-glow: 0px;
+  --np-icon-glow-color: rgba(247, 233, 161, 0.95);
+
+  /* Typo uniforme : même taille titre/artiste, hiérarchie par couleur + graisse */
+  --np-text-size: 12px;
+  --np-title-color: #e9e5b1;
+  --np-artist-color: #d6d5e6;
+  --np-title-outline: 0 1px 1.5px rgba(0, 0, 0, 0.28);
+  --np-artist-outline: 0 1px 1.5px rgba(0, 0, 0, 0.22);
+
+  /* --- Étoile centrale (lilas, douce) --- */
+  --np-star-size: 9px;
+  --np-star-border-color: #9d82a8;
+  --np-star-gradient: radial-gradient(
+    circle,
+    #e3cdec 0%,
+    #dabfe5 35%,
+    #d2b3de 70%,
+    #b394bf 100%
+  );
+  --np-star-glow:
+    0 0 4px rgba(185, 151, 198, 0.4),
+    0 0 8px rgba(185, 151, 198, 0.22),
+    0 0 12px rgba(185, 151, 198, 0.12);
+  --np-star-outer: radial-gradient(
+    circle,
+    rgba(185, 151, 198, 0.4) 0%,
+    rgba(185, 151, 198, 0.1) 25%,
+    transparent 70%
+  );
+  --np-star-pulse-speed: 4.5s;
+  --np-star-pulse-scale: 1.12;
+
+  /* --- Séparateur 3 points (couleur du remplissage de la barre) --- */
+  --np-divider-color: #bca3f7;
+
+  /* --- Barre de progression 80×8 : plat, bout biseauté à deux pans --- */
+  --np-progress-width: 80px;
+  --np-progress-height: 8px;
+  --np-progress-track: rgba(55, 55, 83, 1);
+  --np-progress-fill: #bca3f7;
+  --np-tip-bevel: 4px; /* profondeur de la pointe = hauteur/2 (calculé en JS) */
+}
+
+/* ===== ROOT (contexte de positionnement, laisse dépasser la couche burst) ===== */
+.np-root {
+  position: relative;
+  display: inline-block;
+}
+
+/* ===== CARD (boîte visuelle : fond, ombre douce) ===== */
+.np-card {
+  position: relative;
+  width: var(--np-card-width);
+  height: var(--np-card-height);
+  box-sizing: border-box;
+
+  border-radius: var(--np-radius);
+
+  /* Fond translucide teinté. PAS de backdrop-filter : dans une source
+     navigateur OBS, il n'a pas accès aux pixels du stream et rend un voile
+     GRIS sur fond transparent. La transparence sur le stream se règle via
+     l'opacité de la couleur (sur du sombre, #16151e translucide tire vers
+     un brun-gris type #302a22 — c'est voulu, c'est le rendu de référence). */
+  background: var(--np-card-bg);
+
+  border: var(--np-border-width) solid var(--np-border-color);
+
+  /* Profondeur douce : ombre portée floue + fin reflet interne en haut.
+     box-shadow fonctionne bien dans OBS (≠ backdrop-filter). */
+  box-shadow: var(--np-card-shadow);
+
+  /* overflow VISIBLE volontairement : préserve le halo de l'étoile centrale */
+}
+
+/* ===== CONTENT (le vrai conteneur flex du contenu) ===== */
+.np-content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: 100%;
+  padding: 0 var(--np-side-margin);
+  box-sizing: border-box;
+}
+
+/* ===== COUCHES D'ÉTOILES ===== */
+.np-fx-ambient {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  border-radius: var(--np-radius);
+  pointer-events: none;
+}
+
+.np-fx-burst {
+  position: absolute;
+  inset: -7px;
+  z-index: 5;
+  overflow: hidden;
+  border-radius: calc(var(--np-radius) + 5px);
+  pointer-events: none;
+}
+
+.np-fx-dot {
+  position: absolute;
+  border-radius: 50%;
+  background: #ffffff; /* surchargé en JS par la couleur choisie */
+  pointer-events: none;
+  /* PAS de will-change : la promotion en couche GPU force la rasterisation
+     de toute la carte pendant les animations -> flou global dans OBS/SE.
+     Les ambiantes sont animées sur le thread principal (aucune couche),
+     les bursts via WAAPI (promotion auto, acceptée pendant les fondus). */
+}
+.np-fx-spk {
+  position: absolute;
+  pointer-events: none;
+}
+
+/* ===== APPARITION / DISPARITION de la carte ===== */
+.np-card.np-hidden {
+  opacity: 0;
+}
+.np-card.np-appearing {
+  animation: npCardIn 1.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+.np-card.np-disappearing {
+  animation: npCardOut 1.7s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+@keyframes npCardIn {
+  0%   { opacity: 0; transform: scale(0.975); }
+  45%  { opacity: 0.5; }
+  100% { opacity: 1; transform: scale(1); }
+}
+@keyframes npCardOut {
+  0%   { opacity: 1; transform: scale(1); }
+  55%  { opacity: 0.5; }
+  100% { opacity: 0; transform: scale(0.975); }
+}
+
+/* ===== ÉTAT VEILLE (aucune musique) : l'étoile s'éteint en douceur ===== */
+.np-card.np-idle .np-star-sep {
+  animation: none;
+  filter: grayscale(1) brightness(0.85);
+}
+.np-card.np-idle .np-star-sep::before {
+  box-shadow:
+    0 0 4px rgba(210, 179, 222, 0),
+    0 0 8px rgba(210, 179, 222, 0),
+    0 0 12px rgba(210, 179, 222, 0);
+}
+.np-card.np-idle .np-star-sep::after {
+  opacity: 0;
+}
+
+/* ===== PLAY ICON ===== */
+.np-play-icon {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: var(--np-icon-gap);
+  color: var(--np-play-color);
+}
+
+.np-play-icon svg {
+  display: block;
+  width: var(--np-icon-size);
+  height: var(--np-icon-size);
+  filter: drop-shadow(0 0 var(--np-icon-glow) var(--np-icon-glow-color))
+          drop-shadow(0 0 var(--np-icon-glow) var(--np-icon-glow-color));
+}
+
+/* ===== ZONE TEXTE (flexible : toute la largeur libre entre icône et barre) ===== */
+.np-track-zone {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start; /* le bloc démarre toujours après l'icône */
+  overflow: hidden;
+  margin-right: var(--np-text-bar-gap);
+  box-sizing: border-box;
+}
+
+/* FONDU DE BORDS PENDANT LE DÉFILEMENT — repeint SANS mask-image.
+   Un mask forcerait la zone dans une surface composée (rasterisation ->
+   texte flou dans OBS/SE). À la place, le JS peint un dégradé d'alpha
+   DANS les glyphes eux-mêmes (background-clip:text, couleurs du
+   titre/artiste), calé sur la zone et recalé à chaque frame ; sa largeur
+   rétrécit continûment près des butées pour ne jamais mordre le texte.
+   Voir l'objet "painter" dans le JS. La classe .np-scrolling reste posée
+   par le JS (aucune règle nécessaire ici). */
+
+/* ===== BLOC [titre ★ artiste] : une seule unité qui vit, défile et se remplace =====
+   ANTI-FLOU : le défilement ET le swap de changement de piste sont pilotés
+   en JS via margin-left + opacity en styles inline (thread principal).
+   margin-left est une propriété de layout : elle ne peut PAS déclencher
+   de promotion en couche GPU, contrairement à transform (heuristique
+   Chromium sur les transforms qui changent à chaque frame) ou aux
+   animations CSS/WAAPI (composées d'office). Le texte reste net. */
+.np-track-block {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--np-block-gap);
+  white-space: nowrap;
+  /* 2px de sécurité à DROITE uniquement : compté dans scrollWidth (donc
+     cohérent avec la mesure du marquee), il garantit que l'encre du
+     dernier glyphe ne touche jamais le bord du clip — couvre les résidus
+     d'arrondi sub-pixel (mesures entières) et le débord d'encre de
+     certains glyphes, y compris en fin de course de défilement. Rien à
+     gauche : l'espacement icône -> texte reste exactement celui configuré. */
+  padding: 2px 2px 2px 0;
+}
+
+/* ===== TEXTES (typo uniforme : même taille, hiérarchie par couleur/graisse) ===== */
+.np-title {
+  color: var(--np-title-color);
+  font-size: var(--np-text-size);
+  font-weight: 600;
+  text-shadow: var(--np-title-outline);
+}
+
+.np-artist {
+  color: var(--np-artist-color);
+  font-size: var(--np-text-size);
+  font-weight: 500;
+  text-shadow: var(--np-artist-outline);
+}
+
+/* ===== DIVIDER (3 points, entre texte et barre — marge égale des 2 côtés) ===== */
+.np-divider {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-right: var(--np-text-bar-gap);
+}
+
+.np-divider span {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background-color: var(--np-divider-color);
+}
+
+/* ===== PROGRESS 80×8 (rainure pleine, remplissage plat à bout biseauté) ===== */
+.np-progress-track {
+  flex: 0 0 auto;
+  width: var(--np-progress-width);
+  height: var(--np-progress-height);
+  border-radius: 999px;
+  background: var(--np-progress-track);
+  position: relative;
+  /* overflow hidden : plus de halo à préserver ici, la rainure arrondit
+     proprement le côté gauche du remplissage et le bout à 100 %. */
+  overflow: hidden;
+}
+
+.np-progress-bar {
+  height: 100%;
+  width: 0%;
+  background: var(--np-progress-fill);
+
+  /* Bout biseauté à deux pans : la pointe centrale adoucit visuellement
+     la fin du remplissage, sans point lumineux ni halo. */
+  clip-path: polygon(
+    0 0,
+    calc(100% - var(--np-tip-bevel)) 0,
+    100% 50%,
+    calc(100% - var(--np-tip-bevel)) 100%,
+    0 100%
+  );
+
+  /* Glissement continu entre deux rendus (le JS pousse la largeur toutes
+     les 200 ms, la transition lisse le mouvement). */
+  transition: width 0.3s linear;
+}
+
+/* Reset animé : au changement de piste, la barre RECULE vers 0 en douceur */
+.np-progress-bar.np-bar-reset {
+  transition: width 0.6s cubic-bezier(0.25, 0.1, 0.25, 1);
+}
+
+/* ===== STAR SEP (étoile animée, au cœur du bloc) ===== */
+.np-star-sep {
+  flex: 0 0 auto;
+  width: var(--np-star-size);
+  height: var(--np-star-size);
+  position: relative;
+  border: 0.8px outset var(--np-star-border-color);
+  transform: rotate(45deg);
+  filter: grayscale(0) brightness(1);
+  animation: starGlow var(--np-star-pulse-speed) infinite ease-in-out;
+  transition: filter 0.8s ease, transform 0.8s ease;
+}
+
+.np-star-sep::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--np-star-gradient);
+  border-radius: 2px;
+  box-shadow: var(--np-star-glow);
+  transition: box-shadow 0.8s ease;
+}
+
+.np-star-sep::after {
+  content: "";
+  position: absolute;
+  inset: -6px;
+  background: var(--np-star-outer);
+  opacity: 0.4;
+  filter: blur(1px);
+  transition: opacity 0.8s ease;
+}
+
+@keyframes starGlow {
+  0%, 100% {
+    transform: rotate(45deg) scale(1);
+  }
+  50% {
+    transform: rotate(45deg) scale(var(--np-star-pulse-scale));
+  }
+}

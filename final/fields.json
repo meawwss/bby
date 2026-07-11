@@ -1,0 +1,458 @@
+{
+  "presetBg": {
+    "type": "dropdown",
+    "label": "🎛️ Preset de fond (nuit lavande) — 'Manuel' = réglages libres ci-dessous",
+    "value": "custom",
+    "options": {
+      "custom": "Manuel (couleur + opacité ci-dessous)",
+      "n1": "N1 — nuit référence #16151e · 85%",
+      "n2": "N2 — nuit aérienne #16151e · 70%",
+      "n3": "N3 — nuit pleine #16151e · 100%",
+      "n4": "N4 — nuit bleutée #1b1a26 · 85%",
+      "n5": "N5 — nuit mauve #221c2b · 85%",
+      "n6": "N6 — encre profonde #0f0e15 · 90%"
+    },
+    "group": "🎛️ Presets"
+  },
+  "presetText": {
+    "type": "dropdown",
+    "label": "🎛️ Preset de texte — 'Manuel' = couleurs titre/artiste ci-dessous",
+    "value": "custom",
+    "options": {
+      "custom": "Manuel (couleurs ci-dessous)",
+      "t1": "T1 — référence : titre jaune pâle / artiste lavande",
+      "t2": "T2 — tout lavande (artiste éteint)",
+      "t3": "T3 — duo lumineux",
+      "t4": "T4 — mauve doux / lavande"
+    },
+    "group": "🎛️ Presets"
+  },
+  "spotifyClientId": {
+    "type": "text",
+    "label": "Spotify Client ID (via la page de connexion)",
+    "value": "",
+    "group": "🔌 Connexion Spotify"
+  },
+  "spotifyRefreshToken": {
+    "type": "text",
+    "label": "Spotify Refresh Token (via la page de connexion)",
+    "value": "",
+    "group": "🔌 Connexion Spotify"
+  },
+  "refreshSeconds": {
+    "type": "number",
+    "label": "Fréquence de vérification (secondes) — 3 à 5 conseillé",
+    "value": 4,
+    "min": 2,
+    "max": 30,
+    "step": 1,
+    "group": "🔌 Connexion Spotify"
+  },
+  "enableAppear": {
+    "type": "dropdown",
+    "label": "✨ Animation d'apparition (étoiles) quand un son démarre",
+    "value": "true",
+    "options": {
+      "true": "Oui",
+      "false": "Non"
+    },
+    "group": "⚙️ Comportement & affichage"
+  },
+  "enableDisappear": {
+    "type": "dropdown",
+    "label": "✨ Disparition (étoiles) + masquage quand rien ne joue",
+    "value": "true",
+    "options": {
+      "true": "Oui",
+      "false": "Non"
+    },
+    "group": "⚙️ Comportement & affichage"
+  },
+  "enableAmbient": {
+    "type": "dropdown",
+    "label": "✨ Étoiles ambiantes pendant la lecture",
+    "value": "true",
+    "options": {
+      "true": "Oui",
+      "false": "Non"
+    },
+    "group": "⚙️ Comportement & affichage"
+  },
+  "hideDelaySeconds": {
+    "type": "number",
+    "label": "Délai avant disparition quand rien ne joue (secondes)",
+    "value": 20,
+    "min": 0,
+    "max": 300,
+    "step": 1,
+    "group": "⚙️ Comportement & affichage"
+  },
+  "showLastTrack": {
+    "type": "dropdown",
+    "label": "Afficher le dernier son pendant le délai (sinon 'aucune musique')",
+    "value": "true",
+    "options": {
+      "true": "Oui",
+      "false": "Non"
+    },
+    "group": "⚙️ Comportement & affichage"
+  },
+  "placeholderTitle": {
+    "type": "text",
+    "label": "Titre affiché si aucun son",
+    "value": "Aucune musique",
+    "group": "⚙️ Comportement & affichage"
+  },
+  "placeholderArtist": {
+    "type": "text",
+    "label": "Artiste affiché si aucun son",
+    "value": "—",
+    "group": "⚙️ Comportement & affichage"
+  },
+  "cardWidth": {
+    "type": "number",
+    "label": "Largeur de la pilule (px)",
+    "value": 400,
+    "min": 200,
+    "max": 900,
+    "step": 1,
+    "group": "📐 Dimensions"
+  },
+  "cardHeight": {
+    "type": "number",
+    "label": "Hauteur de la pilule (px)",
+    "value": 38,
+    "min": 28,
+    "max": 80,
+    "step": 1,
+    "group": "📐 Dimensions"
+  },
+  "cardRadius": {
+    "type": "number",
+    "label": "Arrondi des coins (px) — hauteur/2 = pilule parfaite",
+    "value": 19,
+    "min": 0,
+    "max": 40,
+    "step": 1,
+    "group": "📐 Dimensions"
+  },
+  "sideMargin": {
+    "type": "number",
+    "label": "Marge intérieure gauche/droite (px)",
+    "value": 32,
+    "min": 8,
+    "max": 60,
+    "step": 1,
+    "group": "📐 Dimensions"
+  },
+  "iconTextGap": {
+    "type": "number",
+    "label": "Espace icône → texte (px)",
+    "value": 13,
+    "min": 4,
+    "max": 30,
+    "step": 1,
+    "group": "📐 Dimensions"
+  },
+  "blockGap": {
+    "type": "number",
+    "label": "Espace titre → étoile → artiste (px)",
+    "value": 12,
+    "min": 4,
+    "max": 30,
+    "step": 1,
+    "group": "📐 Dimensions"
+  },
+  "textBarGap": {
+    "type": "number",
+    "label": "Marge autour du séparateur 3 points (px, de chaque côté)",
+    "value": 12,
+    "min": 4,
+    "max": 40,
+    "step": 1,
+    "group": "📐 Dimensions"
+  },
+  "cardBgColor": {
+    "type": "colorpicker",
+    "label": "Couleur de fond de la pilule (si preset = Manuel)",
+    "value": "#16151e",
+    "group": "🎨 Fond & bordure"
+  },
+  "cardBgOpacity": {
+    "type": "slider",
+    "label": "Opacité du fond (si preset = Manuel)",
+    "value": 0.85,
+    "min": 0,
+    "max": 1,
+    "step": 0.02,
+    "group": "🎨 Fond & bordure"
+  },
+  "borderColor": {
+    "type": "colorpicker",
+    "label": "Couleur de la bordure",
+    "value": "#373753",
+    "group": "🎨 Fond & bordure"
+  },
+  "borderOpacity": {
+    "type": "slider",
+    "label": "Opacité de la bordure",
+    "value": 0.5,
+    "min": 0,
+    "max": 1,
+    "step": 0.02,
+    "group": "🎨 Fond & bordure"
+  },
+  "borderWidth": {
+    "type": "number",
+    "label": "Épaisseur de la bordure (px, 0 = aucune)",
+    "value": 0,
+    "min": 0,
+    "max": 12,
+    "step": 0.1,
+    "group": "🎨 Fond & bordure"
+  },
+  "shadowOpacity": {
+    "type": "slider",
+    "label": "Opacité de l'ombre portée (0 = aucune)",
+    "value": 0.28,
+    "min": 0,
+    "max": 1,
+    "step": 0.02,
+    "group": "🎨 Fond & bordure"
+  },
+  "shadowColor": {
+    "type": "colorpicker",
+    "label": "Couleur de l'ombre portée",
+    "value": "#000000",
+    "group": "🎨 Fond & bordure"
+  },
+  "shadowBlur": {
+    "type": "slider",
+    "label": "Diffusion de l'ombre (px)",
+    "value": 4,
+    "min": 0,
+    "max": 40,
+    "step": 1,
+    "group": "🎨 Fond & bordure"
+  },
+  "fontFamily": {
+    "type": "googleFont",
+    "label": "Police (Google Fonts)",
+    "value": "Quicksand",
+    "group": "🎵 Icône & texte"
+  },
+  "textSize": {
+    "type": "number",
+    "label": "Taille du texte (px) — uniforme titre + artiste",
+    "value": 12,
+    "min": 8,
+    "max": 24,
+    "step": 0.5,
+    "group": "🎵 Icône & texte"
+  },
+  "titleColor": {
+    "type": "colorpicker",
+    "label": "Couleur du titre (si preset texte = Manuel)",
+    "value": "#e9e5b1",
+    "group": "🎵 Icône & texte"
+  },
+  "artistColor": {
+    "type": "colorpicker",
+    "label": "Couleur de l'artiste (si preset texte = Manuel)",
+    "value": "#d6d5e6",
+    "group": "🎵 Icône & texte"
+  },
+  "playColor": {
+    "type": "colorpicker",
+    "label": "Couleur de l'icône lecture",
+    "value": "#f7e9a1",
+    "group": "🎵 Icône & texte"
+  },
+  "iconSize": {
+    "type": "number",
+    "label": "Taille de l'icône musique (px)",
+    "value": 11,
+    "min": 8,
+    "max": 40,
+    "step": 1,
+    "group": "🎵 Icône & texte"
+  },
+  "iconGlow": {
+    "type": "number",
+    "label": "Intensité du halo de l'icône (px, 0 = aucun)",
+    "value": 0,
+    "min": 0,
+    "max": 12,
+    "step": 0.5,
+    "group": "🎵 Icône & texte"
+  },
+  "iconHaloColor": {
+    "type": "colorpicker",
+    "label": "Couleur du halo derrière l'icône",
+    "value": "#f7e9a1",
+    "group": "🎵 Icône & texte"
+  },
+  "textStrokeColor": {
+    "type": "colorpicker",
+    "label": "Couleur du contour du texte (si activé)",
+    "value": "#0e0d14",
+    "group": "🎵 Icône & texte"
+  },
+  "titleStrokeWidth": {
+    "type": "number",
+    "label": "Épaisseur contour titre (px, 0 = aucun)",
+    "value": 0,
+    "min": 0,
+    "max": 4,
+    "step": 0.1,
+    "group": "🎵 Icône & texte"
+  },
+  "artistStrokeWidth": {
+    "type": "number",
+    "label": "Épaisseur contour artiste (px, 0 = aucun)",
+    "value": 0,
+    "min": 0,
+    "max": 4,
+    "step": 0.1,
+    "group": "🎵 Icône & texte"
+  },
+  "scrollPauseSeconds": {
+    "type": "number",
+    "label": "Pause avant/entre chaque défilement (secondes)",
+    "value": 4,
+    "min": 1,
+    "max": 12,
+    "step": 0.5,
+    "group": "🌀 Défilement du texte"
+  },
+  "scrollSpeed": {
+    "type": "number",
+    "label": "Vitesse de défilement (px/seconde) — douce vers 19",
+    "value": 19,
+    "min": 8,
+    "max": 60,
+    "step": 1,
+    "group": "🌀 Défilement du texte"
+  },
+  "starColor": {
+    "type": "colorpicker",
+    "label": "Couleur de l'étoile centrale",
+    "value": "#d2b3de",
+    "group": "⭐ Étoile centrale"
+  },
+  "starGlowColor": {
+    "type": "colorpicker",
+    "label": "Couleur du halo de l'étoile",
+    "value": "#b997c6",
+    "group": "⭐ Étoile centrale"
+  },
+  "starBorderColor": {
+    "type": "colorpicker",
+    "label": "Couleur du contour de l'étoile",
+    "value": "#9d82a8",
+    "group": "⭐ Étoile centrale"
+  },
+  "starSize": {
+    "type": "slider",
+    "label": "Taille de l'étoile (px)",
+    "value": 9,
+    "min": 6,
+    "max": 24,
+    "step": 1,
+    "group": "⭐ Étoile centrale"
+  },
+  "starGlowIntensity": {
+    "type": "slider",
+    "label": "Intensité du halo (0 = aucun, 1 = normal)",
+    "value": 0.4,
+    "min": 0,
+    "max": 3,
+    "step": 0.05,
+    "group": "⭐ Étoile centrale"
+  },
+  "starPulseScale": {
+    "type": "slider",
+    "label": "Ampleur de la pulsation (1 = fixe)",
+    "value": 1.12,
+    "min": 1,
+    "max": 1.5,
+    "step": 0.01,
+    "group": "⭐ Étoile centrale"
+  },
+  "starPulseSpeed": {
+    "type": "number",
+    "label": "Durée d'un battement (secondes, plus grand = plus lent)",
+    "value": 4.5,
+    "min": 0.5,
+    "max": 12,
+    "step": 0.5,
+    "group": "⭐ Étoile centrale"
+  },
+  "ambientStarColor": {
+    "type": "colorpicker",
+    "label": "Couleur des étoiles ambiantes (pendant la lecture)",
+    "value": "#d2b3de",
+    "group": "✨ Effets d'étoiles"
+  },
+  "burstStarColor": {
+    "type": "colorpicker",
+    "label": "Couleur des étoiles d'apparition / disparition",
+    "value": "#e3d3ec",
+    "group": "✨ Effets d'étoiles"
+  },
+  "dividerColor": {
+    "type": "colorpicker",
+    "label": "Couleur du séparateur 3 points (avant la barre)",
+    "value": "#bca3f7",
+    "group": "🎚️ Barre de progression"
+  },
+  "progressFillColor": {
+    "type": "colorpicker",
+    "label": "Couleur de la barre (remplissage)",
+    "value": "#bca3f7",
+    "group": "🎚️ Barre de progression"
+  },
+  "progressStyle": {
+    "type": "dropdown",
+    "label": "Style du remplissage",
+    "value": "flat",
+    "options": {
+      "flat": "Couleur unie (recommandé)",
+      "gradient": "Dégradé doux"
+    },
+    "group": "🎚️ Barre de progression"
+  },
+  "progressTrackColor": {
+    "type": "colorpicker",
+    "label": "Couleur de la barre vide (rainure)",
+    "value": "#373753",
+    "group": "🎚️ Barre de progression"
+  },
+  "progressTrackOpacity": {
+    "type": "slider",
+    "label": "Opacité de la barre vide",
+    "value": 1,
+    "min": 0,
+    "max": 1,
+    "step": 0.02,
+    "group": "🎚️ Barre de progression"
+  },
+  "progressBarWidth": {
+    "type": "number",
+    "label": "Largeur de la barre (px)",
+    "value": 80,
+    "min": 40,
+    "max": 200,
+    "step": 1,
+    "group": "🎚️ Barre de progression"
+  },
+  "progressBarHeight": {
+    "type": "number",
+    "label": "Hauteur de la barre (px)",
+    "value": 8,
+    "min": 4,
+    "max": 16,
+    "step": 1,
+    "group": "🎚️ Barre de progression"
+  }
+}
