@@ -4,13 +4,15 @@
     "label": "🎛️ Preset de fond (nuit lavande) — 'Manuel' = réglages libres ci-dessous",
     "value": "custom",
     "options": {
-      "custom": "Manuel (couleur + opacité ci-dessous)",
+      "custom": "Manuel (couleur + opacité + teinte ci-dessous)",
       "n1": "N1 — nuit référence #16151e · 85%",
       "n2": "N2 — nuit aérienne #16151e · 70%",
       "n3": "N3 — nuit pleine #16151e · 100%",
       "n4": "N4 — nuit bleutée #1b1a26 · 85%",
       "n5": "N5 — nuit mauve #221c2b · 85%",
-      "n6": "N6 — encre profonde #0f0e15 · 90%"
+      "n6": "N6 — encre profonde #0f0e15 · 90%",
+      "n7": "N7 — lavande vivante (translucide + teinte)",
+      "n8": "N8 — mauve translucide (teinte douce)"
     },
     "group": "🎛️ Presets"
   },
@@ -180,22 +182,37 @@
   },
   "cardBgOpacity": {
     "type": "slider",
-    "label": "Opacité du fond (si preset = Manuel)",
+    "label": "Opacité du fond (si preset = Manuel) - baisse-la pour voir à travers",
     "value": 0.85,
     "min": 0,
     "max": 1,
     "step": 0.02,
     "group": "🎨 Fond & bordure"
   },
+  "cardTintColor": {
+    "type": "colorpicker",
+    "label": "Teinte du fond (couleur par dessus le fond)",
+    "value": "#785ac8",
+    "group": "🎨 Fond & bordure"
+  },
+  "cardTintOpacity": {
+    "type": "slider",
+    "label": "Intensité de la teinte (0 = aucune) — 0.15 à 0.20 pour un fond translucide ET vivant",
+    "value": 0,
+    "min": 0,
+    "max": 0.6,
+    "step": 0.02,
+    "group": "🎨 Fond & bordure"
+  },
   "borderColor": {
     "type": "colorpicker",
-    "label": "Couleur de la bordure",
+    "label": "Couleur de la bordure (visible si épaisseur > 0)",
     "value": "#373753",
     "group": "🎨 Fond & bordure"
   },
   "borderOpacity": {
     "type": "slider",
-    "label": "Opacité de la bordure",
+    "label": "Opacité de la bordure (visible si épaisseur > 0)",
     "value": 0.5,
     "min": 0,
     "max": 1,
@@ -233,6 +250,15 @@
     "min": 0,
     "max": 40,
     "step": 1,
+    "group": "🎨 Fond & bordure"
+  },
+  "sheenOpacity": {
+    "type": "slider",
+    "label": "Reflet interne en haut de la pilule (0 = aucun)",
+    "value": 0.1,
+    "min": 0,
+    "max": 0.4,
+    "step": 0.01,
     "group": "🎨 Fond & bordure"
   },
   "fontFamily": {

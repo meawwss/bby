@@ -393,15 +393,25 @@ window.addEventListener('onWidgetLoad', function (obj) {
   const ICON_GAP     = int(fieldData.iconTextGap, 13);
   const BLOCK_GAP    = int(fieldData.blockGap, 12);
   const TEXT_BAR_GAP = int(fieldData.textBarGap, 12);
+
+  // Fond : couleur + opacité (le voile) ... et TEINTE (la vivacité).
+  // Un rgba() sombre dilué dans le stream est un mélange linéaire : il
+  // désature tout ce qui passe au travers -> gris terne. La couche de
+  // teinte redonne de la couleur à la pilule SANS l'assombrir. Les deux
+  // restent 100 % pilotés par les Fields.
   let CARD_BG_COLOR = fieldData.cardBgColor || '#16151e';
   let CARD_BG_OPACITY = num(fieldData.cardBgOpacity, 0.85);
+  let CARD_TINT_COLOR = fieldData.cardTintColor || '#785ac8';
+  let CARD_TINT_OPACITY = num(fieldData.cardTintOpacity, 0);
+
   const BORDER_COLOR = fieldData.borderColor || '#373753';
   const BORDER_OPACITY = num(fieldData.borderOpacity, 0.5);
   const BORDER_WIDTH = num(fieldData.borderWidth, 0);
   const RADIUS = int(fieldData.cardRadius, 19);
   const SHADOW_OPACITY = num(fieldData.shadowOpacity, 0.28);
   const SHADOW_COLOR = fieldData.shadowColor || '#000000';
-  const SHADOW_BLUR = num(fieldData.shadowBlur, 16);
+  const SHADOW_BLUR = num(fieldData.shadowBlur, 4);   // aligné sur le JSON
+  const SHEEN_OPACITY = num(fieldData.sheenOpacity, 0.1);
   const PLAY_COLOR = fieldData.playColor || '#f7e9a1';
   const ICON_SIZE = num(fieldData.iconSize, 11);
   const ICON_GLOW = num(fieldData.iconGlow, 0);
@@ -424,15 +434,19 @@ window.addEventListener('onWidgetLoad', function (obj) {
   document.head.appendChild(fontLink);
 
   // ===== PRESETS — palette "nuit lavande" =====
-  // Fond : écrase couleur + opacité si un preset est choisi.
-  // "custom" (Manuel) => les champs individuels font foi.
+  // Fond : écrase couleur + opacité (+ teinte si définie) si un preset
+  // est choisi. "custom" (Manuel) => les champs individuels font foi.
+  // Les presets n1-n6 n'ont PAS de teinte : ils la remettent à 0 pour
+  // rester fidèles au rendu d'origine. n7/n8 exploitent la teinte.
   const BG_PRESETS = {
-    n1: { hex: '#16151e', op: 0.85 },   // nuit référence
-    n2: { hex: '#16151e', op: 0.70 },   // nuit plus aérienne
-    n3: { hex: '#16151e', op: 1.00 },   // nuit pleine (opaque)
-    n4: { hex: '#1b1a26', op: 0.85 },   // nuit bleutée
-    n5: { hex: '#221c2b', op: 0.85 },   // nuit mauve
-    n6: { hex: '#0f0e15', op: 0.90 },   // encre profonde
+    n1: { hex: '#16151e', op: 0.85, tint: '#785ac8', tintOp: 0 },      // nuit référence
+    n2: { hex: '#16151e', op: 0.70, tint: '#785ac8', tintOp: 0 },      // nuit plus aérienne
+    n3: { hex: '#16151e', op: 1.00, tint: '#785ac8', tintOp: 0 },      // nuit pleine (opaque)
+    n4: { hex: '#1b1a26', op: 0.85, tint: '#785ac8', tintOp: 0 },      // nuit bleutée
+    n5: { hex: '#221c2b', op: 0.85, tint: '#785ac8', tintOp: 0 },      // nuit mauve
+    n6: { hex: '#0f0e15', op: 0.90, tint: '#785ac8', tintOp: 0 },      // encre profonde
+    n7: { hex: '#16151e', op: 0.68, tint: '#785ac8', tintOp: 0.18 },   // lavande vivante
+    n8: { hex: '#1b1a26', op: 0.72, tint: '#c8a2e8', tintOp: 0.14 },   // mauve translucide
   };
   // Texte : écrase couleurs titre + artiste si un preset est choisi.
   const TEXT_PRESETS = {
@@ -446,6 +460,8 @@ window.addEventListener('onWidgetLoad', function (obj) {
   if (bgPreset) {
     CARD_BG_COLOR = bgPreset.hex;
     CARD_BG_OPACITY = bgPreset.op;
+    if (bgPreset.tint) CARD_TINT_COLOR = bgPreset.tint;
+    if (bgPreset.tintOp !== undefined) CARD_TINT_OPACITY = bgPreset.tintOp;
   }
   const textPreset = TEXT_PRESETS[fieldData.presetText];
   if (textPreset) {
@@ -488,15 +504,32 @@ window.addEventListener('onWidgetLoad', function (obj) {
   root.setProperty('--np-icon-gap', ICON_GAP + 'px');
   root.setProperty('--np-block-gap', BLOCK_GAP + 'px');
   root.setProperty('--np-text-bar-gap', TEXT_BAR_GAP + 'px');
-  root.setProperty('--np-card-bg', hexToRgba(CARD_BG_COLOR, CARD_BG_OPACITY));
+
+  // --- Fond : encre translucide + (optionnel) couche de teinte par-dessus.
+  // background accepte une PILE de calques : le premier de la liste est le
+  // plus HAUT. On peint donc la teinte au-dessus de l'encre, en un seul
+  // linear-gradient à deux arrêts identiques (= aplat de couleur).
+  // Teinte à 0 -> on retombe exactement sur l'ancien rendu (rgba simple).
+  const baseBg = hexToRgba(CARD_BG_COLOR, CARD_BG_OPACITY);
+  const tint = hexToRgba(CARD_TINT_COLOR, CARD_TINT_OPACITY);
+  root.setProperty('--np-card-bg', CARD_TINT_OPACITY > 0
+    ? `linear-gradient(${tint}, ${tint}), ${baseBg}`
+    : baseBg);
+
   root.setProperty('--np-border-color', hexToRgba(BORDER_COLOR, BORDER_OPACITY));
   root.setProperty('--np-border-width', BORDER_WIDTH + 'px');
   root.setProperty('--np-radius', RADIUS + 'px');
-  // Ombre portée : opacité 0 = aucune ; le fin reflet interne (sheen) est conservé.
-  const sheen = 'inset 0 1px 0 rgba(236, 236, 255, 0.05)';
+
+  // Ombre portée : opacité 0 = aucune ; le fin reflet interne (sheen) est
+  // conservé et désormais réglable (0 = aucun).
+  const sheen = SHEEN_OPACITY > 0
+    ? `inset 0 1px 0 rgba(236, 236, 255, ${SHEEN_OPACITY})`
+    : 'inset 0 0 0 rgba(0, 0, 0, 0)';
+  root.setProperty('--np-sheen', sheen);
   root.setProperty('--np-card-shadow', SHADOW_OPACITY > 0
     ? '0 4px ' + SHADOW_BLUR + 'px ' + hexToRgba(SHADOW_COLOR, SHADOW_OPACITY) + ', ' + sheen
     : sheen);
+
   root.setProperty('--np-play-color', PLAY_COLOR);
   root.setProperty('--np-icon-size', ICON_SIZE + 'px');
   root.setProperty('--np-icon-glow', ICON_GLOW + 'px');
@@ -507,11 +540,11 @@ window.addEventListener('onWidgetLoad', function (obj) {
   // --- Étoile centrale : dégradé + halos construits à partir des couleurs ---
   // Rendu volontairement fondu : cœur peu éclairci (jamais blanc) et halos
   // à faible densité pour rester raccord avec le fond nuit.
-  function buildStarGradient(tint) {
-    const core = lighten(tint, 0.32);
-    const mid  = lighten(tint, 0.15);
-    const edge = tint;
-    const rim  = darken(tint, 0.15);
+  function buildStarGradient(tintHex) {
+    const core = lighten(tintHex, 0.32);
+    const mid  = lighten(tintHex, 0.15);
+    const edge = tintHex;
+    const rim  = darken(tintHex, 0.15);
     return `radial-gradient(circle, ${core} 0%, ${mid} 35%, ${edge} 70%, ${rim} 100%)`;
   }
   function buildStarGlow(glowHex, k) {

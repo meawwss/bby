@@ -17,11 +17,19 @@ body {
   --np-icon-gap: 13px;         /* icône -> bloc texte */
   --np-block-gap: 12px;        /* titre -> étoile -> artiste */
   --np-text-bar-gap: 12px;     /* marge MINIMALE bloc texte -> barre */
+
+  /* Fond : le JS compose ici SOIT un simple rgba(), SOIT une pile
+     [teinte colorée] + [encre translucide] quand l'intensité de teinte
+     est > 0. Une couleur sombre diluée dans le stream perd toute sa
+     saturation (mélange linéaire) et vire au gris ; la couche de teinte
+     rend la couleur à la pilule SANS l'assombrir davantage. */
   --np-card-bg: rgba(22, 21, 30, 0.85);
+
   --np-border-color: rgba(55, 55, 83, 0.5);
   --np-border-width: 0px;
   --np-radius: 19px;
-  --np-card-shadow: 0 4px 16px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(236, 236, 255, 0.05);
+  --np-sheen: inset 0 1px 0 rgba(236, 236, 255, 0.1);
+  --np-card-shadow: 0 4px 4px rgba(0, 0, 0, 0.28), var(--np-sheen);
 
   --np-play-color: #f7e9a1;
   --np-icon-size: 11px;
@@ -87,8 +95,8 @@ body {
   /* Fond translucide teinté. PAS de backdrop-filter : dans une source
      navigateur OBS, il n'a pas accès aux pixels du stream et rend un voile
      GRIS sur fond transparent. La transparence sur le stream se règle via
-     l'opacité de la couleur (sur du sombre, #16151e translucide tire vers
-     un brun-gris type #302a22 — c'est voulu, c'est le rendu de référence). */
+     l'opacité de la couleur, et la VIVACITÉ via la couche de teinte
+     (voir --np-card-bg, composée en JS). */
   background: var(--np-card-bg);
 
   border: var(--np-border-width) solid var(--np-border-color);
@@ -167,16 +175,17 @@ body {
   100% { opacity: 0; transform: scale(0.975); }
 }
 
-/* ===== ÉTAT VEILLE (aucune musique) : l'étoile s'éteint en douceur ===== */
+/* ===== ÉTAT VEILLE (aucune musique) : l'étoile s'éteint en douceur =====
+   box-shadow:none plutôt qu'une liste de rgba() à alpha 0 : le résultat
+   visuel est identique (halo éteint) mais la règle devient AGNOSTIQUE de
+   la couleur choisie dans les Fields. L'ancienne version codait le lilas
+   en dur -> une étoile rose ou dorée s'éteignait en lavande. */
 .np-card.np-idle .np-star-sep {
   animation: none;
   filter: grayscale(1) brightness(0.85);
 }
 .np-card.np-idle .np-star-sep::before {
-  box-shadow:
-    0 0 4px rgba(210, 179, 222, 0),
-    0 0 8px rgba(210, 179, 222, 0),
-    0 0 12px rgba(210, 179, 222, 0);
+  box-shadow: none;
 }
 .np-card.np-idle .np-star-sep::after {
   opacity: 0;
