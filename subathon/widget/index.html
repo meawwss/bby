@@ -1,0 +1,77 @@
+<!-- ============================================================
+     SUBATHON WIDGET — StreamElements
+     Colle ce bloc dans l'onglet HTML
+     ============================================================ -->
+<div id="sb-root" class="sb-root">
+  <div class="sb-stage">
+
+    <!-- ---------- ALERTE ---------- -->
+    <div class="sb-alert" id="sb-alert" aria-live="polite">
+      <span class="sb-alert__icon">
+        <svg viewBox="0 0 48 48" aria-hidden="true">
+          <path class="sb-bubble" d="M11 4h26a7.5 7.5 0 0 1 7.5 7.5v19a7.5 7.5 0 0 1-7.5 7.5h-8.5l-3.3 4.6a1.5 1.5 0 0 1-2.4 0L19.5 38H11a7.5 7.5 0 0 1-7.5-7.5v-19A7.5 7.5 0 0 1 11 4Z"/>
+          <path class="sb-heart" d="M24 32.2s-9.6-5.7-9.6-12.1a5.4 5.4 0 0 1 9.6-3.4 5.4 5.4 0 0 1 9.6 3.4c0 6.4-9.6 12.1-9.6 12.1Z"/>
+        </svg>
+      </span>
+      <span class="sb-alert__text" id="sb-alert-text">a goal has been reached!</span>
+    </div>
+
+    <!-- ---------- CARTE TIMER ---------- -->
+    <div class="sb-cardwrap">
+      <!-- Feuillage. Le COIN de la carte est en (60,60), la boite est centree
+           dessus, et la tige part en y=66 : pile sur le lisere. -->
+      <svg class="sb-foliage sb-foliage--tl" viewBox="0 0 120 120" aria-hidden="true">
+        <!-- Rotation sur un groupe SEPARE : une animation CSS sur `transform`
+             ecrase l-attribut `transform` du meme element. -->
+        <g id="sb-tl-flip" transform="rotate(180 60 60)"><g class="sb-sprig">
+          <path class="sb-stem" d="M11.6 66.0 C 38.2 66.0 67.8 31.7 89.6 3.6"/>
+          <g transform="translate(31.2 60.6) rotate(-81.4)"><path class="sb-leaf" style="--i:0;--p:0.157" d="M 0 0 C 3.80 -3.75 9.88 -6.46 19.76 -6.46 C 30.40 -6.46 36.86 -2.20 38.00 0 C 36.86 2.20 30.40 6.46 19.76 6.46 C 9.88 6.46 3.80 3.75 0 0 Z"/></g>
+          <g transform="translate(31.2 60.6) rotate(26.6)"><path class="sb-leaf" style="--i:1;--p:0.157" d="M 0 0 C 3.80 -3.75 9.88 -6.46 19.76 -6.46 C 30.40 -6.46 36.86 -2.20 38.00 0 C 36.86 2.20 30.40 6.46 19.76 6.46 C 9.88 6.46 3.80 3.75 0 0 Z"/></g>
+          <g transform="translate(49.4 48.0) rotate(-94.4)"><path class="sb-leaf" style="--i:2;--p:0.334" d="M 0 0 C 3.49 -3.44 9.06 -5.93 18.13 -5.93 C 27.89 -5.93 33.82 -2.02 34.87 0 C 33.82 2.02 27.89 5.93 18.13 5.93 C 9.06 5.93 3.49 3.44 0 0 Z"/></g>
+          <g transform="translate(49.4 48.0) rotate(13.6)"><path class="sb-leaf" style="--i:3;--p:0.334" d="M 0 0 C 3.49 -3.44 9.06 -5.93 18.13 -5.93 C 27.89 -5.93 33.82 -2.02 34.87 0 C 33.82 2.02 27.89 5.93 18.13 5.93 C 9.06 5.93 3.49 3.44 0 0 Z"/></g>
+          <g transform="translate(63.2 34.8) rotate(-100.3)"><path class="sb-leaf" style="--i:4;--p:0.516" d="M 0 0 C 3.17 -3.13 8.25 -5.39 16.50 -5.39 C 25.38 -5.39 30.78 -1.83 31.73 0 C 30.78 1.83 25.38 5.39 16.50 5.39 C 8.25 5.39 3.17 3.13 0 0 Z"/></g>
+          <g transform="translate(63.2 34.8) rotate(7.7)"><path class="sb-leaf" style="--i:5;--p:0.516" d="M 0 0 C 3.17 -3.13 8.25 -5.39 16.50 -5.39 C 25.38 -5.39 30.78 -1.83 31.73 0 C 30.78 1.83 25.38 5.39 16.50 5.39 C 8.25 5.39 3.17 3.13 0 0 Z"/></g>
+          <g transform="translate(75.4 21.3) rotate(-103.7)"><path class="sb-leaf" style="--i:6;--p:0.712" d="M 0 0 C 2.86 -2.82 7.43 -4.86 14.87 -4.86 C 22.88 -4.86 27.74 -1.65 28.59 0 C 27.74 1.65 22.88 4.86 14.87 4.86 C 7.43 4.86 2.86 2.82 0 0 Z"/></g>
+          <g transform="translate(75.4 21.3) rotate(4.3)"><path class="sb-leaf" style="--i:7;--p:0.712" d="M 0 0 C 2.86 -2.82 7.43 -4.86 14.87 -4.86 C 22.88 -4.86 27.74 -1.65 28.59 0 C 27.74 1.65 22.88 4.86 14.87 4.86 C 7.43 4.86 2.86 2.82 0 0 Z"/></g>
+          <g transform="translate(86.5 7.6) rotate(-105.7)"><path class="sb-leaf" style="--i:8;--p:0.93" d="M 0 0 C 2.55 -2.51 6.62 -4.33 13.24 -4.33 C 20.37 -4.33 24.70 -1.47 25.46 0 C 24.70 1.47 20.37 4.33 13.24 4.33 C 6.62 4.33 2.55 2.51 0 0 Z"/></g>
+          <g transform="translate(86.5 7.6) rotate(2.3)"><path class="sb-leaf" style="--i:9;--p:0.93" d="M 0 0 C 2.55 -2.51 6.62 -4.33 13.24 -4.33 C 20.37 -4.33 24.70 -1.47 25.46 0 C 24.70 1.47 20.37 4.33 13.24 4.33 C 6.62 4.33 2.55 2.51 0 0 Z"/></g>
+          <g transform="translate(89.6 3.6) rotate(-52.1)"><path class="sb-leaf" style="--i:10;--p:1" d="M 0 0 C 1.90 -1.65 4.94 -2.85 9.88 -2.85 C 15.20 -2.85 18.43 -0.78 19.00 0 C 18.43 0.78 15.20 2.85 9.88 2.85 C 4.94 2.85 1.90 1.65 0 0 Z"/></g>
+          <circle class="sb-mote sb-mote--a" cx="107.6" cy="24.6" r="1.9"/>
+          <circle class="sb-mote sb-mote--b" cx="120.6" cy="7.6" r="2.6"/>
+        </g></g>
+      </svg>
+
+      <svg class="sb-foliage sb-foliage--br" viewBox="0 0 120 120" aria-hidden="true">
+        <g class="sb-sprig">
+          <path class="sb-stem" d="M11.6 66.0 C 38.2 66.0 67.8 31.7 89.6 3.6"/>
+          <g transform="translate(31.2 60.6) rotate(-81.4)"><path class="sb-leaf" style="--i:0;--p:0.157" d="M 0 0 C 3.80 -3.75 9.88 -6.46 19.76 -6.46 C 30.40 -6.46 36.86 -2.20 38.00 0 C 36.86 2.20 30.40 6.46 19.76 6.46 C 9.88 6.46 3.80 3.75 0 0 Z"/></g>
+          <g transform="translate(31.2 60.6) rotate(26.6)"><path class="sb-leaf" style="--i:1;--p:0.157" d="M 0 0 C 3.80 -3.75 9.88 -6.46 19.76 -6.46 C 30.40 -6.46 36.86 -2.20 38.00 0 C 36.86 2.20 30.40 6.46 19.76 6.46 C 9.88 6.46 3.80 3.75 0 0 Z"/></g>
+          <g transform="translate(49.4 48.0) rotate(-94.4)"><path class="sb-leaf" style="--i:2;--p:0.334" d="M 0 0 C 3.49 -3.44 9.06 -5.93 18.13 -5.93 C 27.89 -5.93 33.82 -2.02 34.87 0 C 33.82 2.02 27.89 5.93 18.13 5.93 C 9.06 5.93 3.49 3.44 0 0 Z"/></g>
+          <g transform="translate(49.4 48.0) rotate(13.6)"><path class="sb-leaf" style="--i:3;--p:0.334" d="M 0 0 C 3.49 -3.44 9.06 -5.93 18.13 -5.93 C 27.89 -5.93 33.82 -2.02 34.87 0 C 33.82 2.02 27.89 5.93 18.13 5.93 C 9.06 5.93 3.49 3.44 0 0 Z"/></g>
+          <g transform="translate(63.2 34.8) rotate(-100.3)"><path class="sb-leaf" style="--i:4;--p:0.516" d="M 0 0 C 3.17 -3.13 8.25 -5.39 16.50 -5.39 C 25.38 -5.39 30.78 -1.83 31.73 0 C 30.78 1.83 25.38 5.39 16.50 5.39 C 8.25 5.39 3.17 3.13 0 0 Z"/></g>
+          <g transform="translate(63.2 34.8) rotate(7.7)"><path class="sb-leaf" style="--i:5;--p:0.516" d="M 0 0 C 3.17 -3.13 8.25 -5.39 16.50 -5.39 C 25.38 -5.39 30.78 -1.83 31.73 0 C 30.78 1.83 25.38 5.39 16.50 5.39 C 8.25 5.39 3.17 3.13 0 0 Z"/></g>
+          <g transform="translate(75.4 21.3) rotate(-103.7)"><path class="sb-leaf" style="--i:6;--p:0.712" d="M 0 0 C 2.86 -2.82 7.43 -4.86 14.87 -4.86 C 22.88 -4.86 27.74 -1.65 28.59 0 C 27.74 1.65 22.88 4.86 14.87 4.86 C 7.43 4.86 2.86 2.82 0 0 Z"/></g>
+          <g transform="translate(75.4 21.3) rotate(4.3)"><path class="sb-leaf" style="--i:7;--p:0.712" d="M 0 0 C 2.86 -2.82 7.43 -4.86 14.87 -4.86 C 22.88 -4.86 27.74 -1.65 28.59 0 C 27.74 1.65 22.88 4.86 14.87 4.86 C 7.43 4.86 2.86 2.82 0 0 Z"/></g>
+          <g transform="translate(86.5 7.6) rotate(-105.7)"><path class="sb-leaf" style="--i:8;--p:0.93" d="M 0 0 C 2.55 -2.51 6.62 -4.33 13.24 -4.33 C 20.37 -4.33 24.70 -1.47 25.46 0 C 24.70 1.47 20.37 4.33 13.24 4.33 C 6.62 4.33 2.55 2.51 0 0 Z"/></g>
+          <g transform="translate(86.5 7.6) rotate(2.3)"><path class="sb-leaf" style="--i:9;--p:0.93" d="M 0 0 C 2.55 -2.51 6.62 -4.33 13.24 -4.33 C 20.37 -4.33 24.70 -1.47 25.46 0 C 24.70 1.47 20.37 4.33 13.24 4.33 C 6.62 4.33 2.55 2.51 0 0 Z"/></g>
+          <g transform="translate(89.6 3.6) rotate(-52.1)"><path class="sb-leaf" style="--i:10;--p:1" d="M 0 0 C 1.90 -1.65 4.94 -2.85 9.88 -2.85 C 15.20 -2.85 18.43 -0.78 19.00 0 C 18.43 0.78 15.20 2.85 9.88 2.85 C 4.94 2.85 1.90 1.65 0 0 Z"/></g>
+          <circle class="sb-mote sb-mote--a" cx="107.6" cy="24.6" r="1.9"/>
+          <circle class="sb-mote sb-mote--b" cx="120.6" cy="7.6" r="2.6"/>
+        </g>
+      </svg>
+
+      <div class="sb-card">
+        <div class="sb-timerbox">
+          <div class="sb-timer" id="sb-timer"></div>
+          <!-- mini-alerte épinglée sur le coin du timer -->
+          <div class="sb-mini" id="sb-mini" aria-hidden="true"></div>
+        </div>
+        <div class="sb-counter" id="sb-counter">0/0</div>
+      </div>
+    </div>
+
+    <!-- ---------- GOALS ---------- -->
+    <div class="sb-goals" id="sb-goals"></div>
+
+  </div>
+</div>

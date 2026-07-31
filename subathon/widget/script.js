@@ -1,0 +1,1265 @@
+/* ============================================================
+   SUBATHON WIDGET — StreamElements
+   Colle ce bloc dans l'onglet JS
+
+   Points clés :
+   - le timer est persisté via SE_API.store (survit à un refresh / crash OBS)
+   - on stocke une DATE DE FIN absolue, jamais un nombre de secondes restantes
+   - les gift bombs sont dédupliquées (récap vs events individuels)
+   - `amount` d'un resub = nombre de MOIS, pas un multiplicateur
+   ============================================================ */
+
+(function () {
+  'use strict';
+
+  /* ---------------------------------------------------------
+     Réglages par défaut — écrasés par les Fields StreamElements
+     --------------------------------------------------------- */
+  var D = {
+    scale: 1,
+    fontFamily: 'Fredoka',
+
+    storeKey: 'subathon_v1',
+    startHours: 2,
+    startMinutes: 30,
+    maxHours: 0,                 // 0 = pas de plafond
+    offlineBehaviour: 'pause',   // 'pause' | 'run'
+    beatSeconds: 30,             // periodicite du battement de coeur
+
+    secSubT1: 300, secSubT2: 600, secSubT3: 1500, secSubPrime: 300,
+    giftTimeFactor: 1,
+    secPer100Bits: 60,
+    secPerTipUnit: 30,
+
+    ptsSubT1: 1, ptsSubT2: 2, ptsSubT3: 5, ptsSubPrime: 1,
+    giftPointsFactor: 1,
+    ptsPer100Bits: 0,
+    ptsPerTipUnit: 0,
+
+    goalsList: '10 gift subs|50; terror movie night|100; karaoke night|150; cooking stream|200',
+    goalsVisible: 4,
+    goalFontSize: 21,
+    longLabels: 'shrink',
+    goalsMode: 'batch',          // 'batch' | 'slide'
+    goalsKeepDone: 2,
+    rotateDelay: 6,
+
+    alertText: 'un objectif est atteint!',
+    alertDuration: 6,
+    miniAlerts: 'on',
+    miniDuration: 3,
+
+    giftMode: 'individual',      // 'individual' | 'bulk'
+    commandsEnabled: 'on',
+    commandsWho: 'owner',
+    consoleLogs: 'on',
+    instanceSync: 'on',
+    debugPanel: 'off',
+
+    glowColor: '#B4CC80',
+    glowSize: 7,
+    foliageSize: 76,
+    windAmp: 45, windBob: 45, windSpeed: 50,
+    tlOrientation: 'rot180',
+    creamColor: '#FFFBF3',
+    oliveColor: '#767E4B',
+    leaf1Color: '#ABC776',
+    leaf2Color: '#9BBB63',
+    leaf3Color: '#C2D897',
+    alertBgColor: '#FFFBF3',
+    alertBackground: 'off',
+    alertBgOpacity: 55,
+    alertTextColor: '#515731',
+    glowOpacity: 50
+  };
+
+  var F = {};
+  for (var k in D) F[k] = D[k];
+
+  /* ---------------------------------------------------------
+     État persistant
+     --------------------------------------------------------- */
+  var S = {
+    endsAt: 0,
+    paused: false,
+    pauseRemain: 0,
+    points: 0,
+    windowStart: 0,
+    booted: false
+  };
+
+  var initStarted = false;
+  var el = {}, rows = {}, goals = [], seen = [], recents = [], simSeq = 0,
+      alertQueue = [], alertPhase = 'idle', alertJusqua = 0,
+      rotateTimer = null, saveTimer = null, lastTimerStr = '';
+
+  /* ---------------------------------------------------------
+     Journal console. Tout passe par ici pour pouvoir le couper
+     d'un seul champ le jour du live.
+     --------------------------------------------------------- */
+  var C_TITLE = 'color:#B4CC80;font-weight:bold',
+      C_INFO  = 'color:#8ab4f8',
+      C_OK    = 'color:#7ec46b',
+      C_SKIP  = 'color:#d9a441',
+      C_WARN  = 'color:#e07a5f;font-weight:bold';
+
+  function L(css, msg) {
+    if (F.consoleLogs === 'off') return;
+    console.log('%c[SUBATHON] ' + msg, css);
+  }
+  function Lraw(label, obj) {
+    if (F.consoleLogs === 'off') return;
+    var champs = '';
+    try {
+      if (obj && typeof obj === 'object' && !(obj instanceof Array)) {
+        champs = '   [champs : ' + Object.keys(obj).join(', ') + ']';
+      }
+    } catch (e) {}
+    console.log('%c[SUBATHON] ' + label + champs, C_INFO, obj);
+  }
+  function etat() {
+    return Math.round(S.points) + ' pt · ' + fmt(remaining()) +
+           ' · palier suivant ' + activeTarget() +
+           (S.paused ? ' · EN PAUSE' : '');
+  }
+
+  /* Identifiant unique de CETTE instance, et numero de revision de l-etat.
+     StreamElements renvoie `kvstore:update` a tous les widgets, y compris
+     celui qui vient d-ecrire : sans ces deux reperes, une instance adopte
+     l-echo de sa propre sauvegarde — figee au moment de l-ecriture, donc
+     perimee si un event est arrive entre-temps — et le compteur recule. */
+  var INSTANCE = 'i' + Math.random().toString(36).slice(2, 8) +
+                 Date.now().toString(36).slice(-4);
+
+  /* Battement de coeur : l-etat sauvegarde porte l-heure de sa derniere
+     ecriture. Au demarrage, l-ecart entre ce battement et maintenant donne
+     la duree pendant laquelle le widget n-a pas tourne — typiquement OBS
+     ferme. On peut alors rendre ce temps au chrono. */
+  var derniereEcriture = 0;
+
+  // pseudo de la chaine, fourni par StreamElements au chargement : sert a
+  // reconnaitre la proprietaire meme si les badges manquent
+  var CHAINE = '';
+
+  var $ = function (s) { return document.querySelector(s); };
+  var clamp = function (v, a, b) { return Math.min(b, Math.max(a, v)); };
+  var num = function (v, f) { var n = parseFloat(v); return isNaN(n) ? f : n; };
+
+  /* ---------------------------------------------------------
+     Persistance
+     --------------------------------------------------------- */
+  function hasStore() {
+    return typeof SE_API !== 'undefined' && SE_API && SE_API.store;
+  }
+  function ecrire() {
+      S.rev = num(S.rev, 0) + 1;
+      S.by = INSTANCE;
+      S.beat = derniereEcriture = Date.now();
+      try {
+        // copie figee : SE peut serialiser plus tard, l-objet vivant bougerait
+        var ecriture = SE_API.store.set(F.storeKey, JSON.parse(JSON.stringify(S)));
+        // Une sauvegarde qui echoue en silence serait grave : le battement
+        // resterait fige et, au prochain demarrage, le widget croirait a une
+        // absence alors qu-il tournait. On le signale donc bruyamment.
+        if (ecriture && typeof ecriture['catch'] === 'function') {
+          ecriture['catch'](function (e) {
+            console.warn('[SUBATHON] ÉCHEC DE SAUVEGARDE — état non enregistré', e);
+          });
+        }
+      } catch (e) { console.warn('[SUBATHON] ÉCHEC DE SAUVEGARDE', e); }
+  }
+
+  /* Ecriture differee : pendant une rafale, on n-ecrit qu-une fois a la fin. */
+  function save() {
+    if (!hasStore()) return;
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(ecrire, 350);
+  }
+
+  /* Ecriture immediate, pour la toute premiere sauvegarde au demarrage :
+     si OBS etait tue dans la seconde, un magasin vide ferait repartir le
+     chrono de sa duree initiale. */
+  function saveNow() {
+    if (!hasStore()) return;
+    clearTimeout(saveTimer);
+    ecrire();
+  }
+  function loadState(cb) {
+    if (!hasStore()) return cb(null);
+    var done = false;
+    var finish = function (v) { if (!done) { done = true; cb(v); } };
+    setTimeout(function () { finish(null); }, 2500);   // filet de sécurité
+    try {
+      Promise.resolve(SE_API.store.get(F.storeKey)).then(function (d) {
+        finish(d && typeof d === 'object' && typeof d.endsAt === 'number' ? d : null);
+      })['catch'](function () { finish(null); });
+    } catch (e) { finish(null); }
+  }
+
+  /* ---------------------------------------------------------
+     Timer
+     --------------------------------------------------------- */
+  function remaining() {
+    return S.paused ? Math.max(0, S.pauseRemain) : Math.max(0, S.endsAt - Date.now());
+  }
+  function capTime() {
+    if (F.maxHours > 0) {
+      var max = F.maxHours * 3600000;
+      if (S.paused) S.pauseRemain = Math.min(S.pauseRemain, max);
+      else if (S.endsAt - Date.now() > max) S.endsAt = Date.now() + max;
+    }
+  }
+  /* Une « époque » distingue les actions VOLONTAIRES — reset, pause, retrait
+     de temps — des simples crédits d-events. Les premières doivent pouvoir
+     faire baisser le compteur ; les secondes, jamais. */
+  function nouvelleEpoque() { S.epoch = num(S.epoch, 0) + 1; }
+
+  function addTime(sec) {
+    if (!sec) return;
+    if (sec < 0) nouvelleEpoque();
+    L(C_OK, '     temps  ' + fmt(remaining()) + '  →  ' +
+            fmt(Math.max(0, remaining() + sec * 1000)) +
+            '   (' + (sec > 0 ? '+' : '') + Math.round(sec) + ' s)');
+    if (S.paused) S.pauseRemain = Math.max(0, S.pauseRemain + sec * 1000);
+    else S.endsAt = Date.now() + remaining() + sec * 1000;
+    capTime(); save(); paintTimer();
+  }
+  function setTime(sec) {
+    nouvelleEpoque();
+    if (S.paused) S.pauseRemain = Math.max(0, sec * 1000);
+    else S.endsAt = Date.now() + Math.max(0, sec * 1000);
+    capTime(); save(); paintTimer();
+  }
+  function setPaused(p) {
+    if (p === S.paused) return;
+    nouvelleEpoque();
+    if (p) { S.pauseRemain = remaining(); S.paused = true; }
+    else { S.paused = false; S.endsAt = Date.now() + S.pauseRemain; }
+    el.timer.classList.toggle('is-paused', S.paused);
+    save(); paintTimer();
+  }
+
+  function pad2(n) { return (n < 10 ? '0' : '') + n; }
+  function fmt(ms) {
+    var s = Math.floor(ms / 1000);
+    var h = Math.floor(s / 3600); s -= h * 3600;
+    var m = Math.floor(s / 60);   s -= m * 60;
+    return pad2(h) + ':' + pad2(m) + ':' + pad2(s);
+  }
+  function paintTimer() {
+    var str = fmt(remaining());
+    if (str === lastTimerStr) return;
+    lastTimerStr = str;
+    var html = '';
+    for (var i = 0; i < str.length; i++) {
+      var c = str.charAt(i);
+      html += c === ':' ? '<span class="sb-c">:</span>' : '<span class="sb-d">' + c + '</span>';
+    }
+    el.timer.innerHTML = html;
+  }
+
+  /* ---------------------------------------------------------
+     Goals
+     --------------------------------------------------------- */
+  function parseGoals(raw) {
+    return String(raw || '')
+      .split(/[\n;]+/)
+      .map(function (l) { return l.trim(); })
+      .filter(Boolean)
+      .map(function (l) {
+        var i = l.lastIndexOf('|');
+        if (i < 0) return { label: l, value: 0 };
+        return {
+          label: l.slice(0, i).trim(),
+          value: num(l.slice(i + 1).replace(',', '.'), 0)
+        };
+      })
+      .filter(function (g) { return g.label; });
+  }
+  function isDone(i) { return goals[i] && S.points >= goals[i].value; }
+  function firstIncomplete() {
+    for (var i = 0; i < goals.length; i++) if (!isDone(i)) return i;
+    return goals.length;
+  }
+  function activeTarget() {
+    var i = firstIncomplete();
+    if (i < goals.length) return goals[i].value;
+    return goals.length ? goals[goals.length - 1].value : 0;
+  }
+  function targetWindowStart() {
+    var n = Math.max(1, F.goalsVisible), max = Math.max(0, goals.length - n);
+    if (F.goalsMode === 'slide') {
+      return clamp(firstIncomplete() - Math.max(0, F.goalsKeepDone), 0, max);
+    }
+    // mode "batch" : on n'avance que lorsque toute la fournée est cochée
+    var start = S.windowStart;
+    while (start + n <= goals.length - 1) {
+      var all = true;
+      for (var i = start; i < Math.min(start + n, goals.length); i++) {
+        if (!isDone(i)) { all = false; break; }
+      }
+      if (!all) break;
+      start += n;
+    }
+    return clamp(start, 0, max);
+  }
+  function scheduleRotate() {
+    clearTimeout(rotateTimer);
+    rotateTimer = setTimeout(function () {
+      var t = targetWindowStart();
+      if (t !== S.windowStart) { S.windowStart = t; save(); syncGoals(false); }
+    }, Math.max(0, F.rotateDelay) * 1000);
+  }
+
+  function makeRow(i) {
+    var d = document.createElement('div');
+    d.className = 'sb-goal';
+    d.dataset.i = i;
+    var lab = document.createElement('span');
+    lab.className = 'sb-goal__label';
+    var txt = document.createElement('span');
+    txt.className = 'sb-goal__text';
+    txt.textContent = goals[i].label;
+    lab.appendChild(txt);
+    var val = document.createElement('span');
+    val.className = 'sb-goal__value';
+    val.textContent = goals[i].value;
+    d.appendChild(lab); d.appendChild(val);
+    return d;
+  }
+
+  /* Ajustement des libelles trop longs pour la ligne. Trois strategies, au
+     choix du client : reduire la police jusqu-a ce que ca rentre, faire
+     defiler doucement, ou tronquer. */
+  function fitLabel(node) {
+    var lab = node.querySelector('.sb-goal__label');
+    var txt = node.querySelector('.sb-goal__text');
+    if (!lab || !txt) return;
+    node.classList.remove('sb-goal--scroll', 'sb-goal--clip');
+    txt.style.fontSize = '';
+    txt.style.removeProperty('--sc-dist');
+
+    var avail = lab.clientWidth;
+    var need = txt.scrollWidth;
+    if (!avail || !need || need <= avail + 1) return;   // rentre deja, ou pas encore rendu
+
+    if (F.longLabels === 'scroll') {
+      var dist = need - avail;
+      node.classList.add('sb-goal--scroll');
+      txt.style.setProperty('--sc-dist', dist + 'px');
+      txt.style.setProperty('--sc-dur', (7 + dist / 16).toFixed(1) + 's');
+    } else if (F.longLabels === 'clip') {
+      node.classList.add('sb-goal--clip');
+    } else {
+      // reduction : on descend jusqu-a ce que ca rentre, sans passer sous 13 px
+      var size = Math.max(13, F.goalFontSize * (avail / need));
+      txt.style.fontSize = size.toFixed(1) + 'px';
+      if (txt.scrollWidth > lab.clientWidth + 1) node.classList.add('sb-goal--clip');
+    }
+  }
+
+  function syncGoals(initial) {
+    if (initial) { el.goals.innerHTML = ''; rows = {}; }
+    var n = Math.max(1, F.goalsVisible);
+    var start = clamp(S.windowStart, 0, Math.max(0, goals.length - 1));
+    var want = [];
+    for (var i = start; i < Math.min(start + n, goals.length); i++) want.push(i);
+
+    // sortie
+    Object.keys(rows).forEach(function (key) {
+      if (want.indexOf(+key) === -1) {
+        var node = rows[key];
+        delete rows[key];
+        node.classList.add('is-leaving');
+        setTimeout(function () { if (node.parentNode) node.parentNode.removeChild(node); }, 520);
+      }
+    });
+
+    // entrée + remise en ordre
+    var prev = null;
+    want.forEach(function (idx) {
+      var node = rows[idx], fresh = false;
+      if (!node) {
+        node = rows[idx] = makeRow(idx);
+        fresh = true;
+        /* On pose l-etat d-arrivee AVANT l-insertion, puis on force le calcul
+           du style avant de le retirer : la transition demarre sans passer par
+           requestAnimationFrame, suspendu dans un onglet en arriere-plan. */
+        if (!initial) node.classList.add('is-entering');
+        el.goals.appendChild(node);
+        if (!initial) {
+          void node.offsetWidth;
+          node.classList.remove('is-entering');
+        }
+      }
+      if (!fresh && node.previousElementSibling !== prev) {
+        if (prev) prev.parentNode.insertBefore(node, prev.nextSibling);
+        else el.goals.insertBefore(node, el.goals.firstChild);
+      }
+      prev = node;
+
+      var done = isDone(idx);
+      if (done && !node.classList.contains('is-done')) {
+        node.classList.add('is-done');
+        if (!initial) {
+          node.classList.add('is-hit');
+          setTimeout(function () { node.classList.remove('is-hit'); }, 520);
+        }
+      } else if (!done) {
+        node.classList.remove('is-done');
+      }
+    });
+
+    /* Ajustement des libelles : la lecture de clientWidth force elle-meme le
+       calcul de mise en page, on peut donc le faire tout de suite. Passer par
+       requestAnimationFrame laisserait les libelles non ajustes tant que
+       l-onglet reste en arriere-plan. */
+    want.forEach(function (idx) { if (rows[idx]) fitLabel(rows[idx]); });
+
+    el.counter.textContent = Math.round(S.points) + '/' + activeTarget();
+  }
+
+  function addPoints(p) {
+    if (!p) return;
+    if (p < 0) nouvelleEpoque();
+    L(C_OK, '     points ' + Math.round(S.points) + '  →  ' + Math.round(S.points + p) +
+            '   (' + (p > 0 ? '+' : '') + p + ')');
+    var before = firstIncomplete();
+    S.points = Math.max(0, S.points + p);
+    var after = firstIncomplete();
+
+    if (after > before) {
+      // un ou plusieurs objectifs viennent de tomber
+      for (var i = before; i < after && i < goals.length; i++) {
+        L(C_TITLE, '     ✔ OBJECTIF ATTEINT : « ' + goals[i].label +
+                   ' » (' + goals[i].value + ')');
+        pushAlert(String(F.alertText).replace(/\{goal\}/gi, goals[i].label));
+      }
+      scheduleRotate();
+    }
+    save();
+    syncGoals(false);
+  }
+
+  /* ---------------------------------------------------------
+     Alerte
+     --------------------------------------------------------- */
+  /* L-alerte est pilotee par des HORODATAGES relus a chaque tick, et non par
+     des minuteries chainees. Deux raisons :
+
+     1. `requestAnimationFrame` est suspendu dans un onglet en arriere-plan.
+        L-utiliser pour declencher la transition laissait l-alerte apparaitre
+        au retour sur l-onglet, apres que la sequence de masquage soit deja
+        passee — donc bloquee a l-ecran jusqu-a l-alerte suivante.
+     2. `setTimeout` est fortement ralenti dans ces memes onglets. Avec des
+        horodatages, l-etat reste juste quoi qu-il arrive : au pire l-alerte
+        disparait des le premier tick qui suit. */
+  function pushAlert(text) {
+    alertQueue.push(text);
+    if (alertQueue.length > 5) alertQueue.shift();   // pas d-embouteillage
+    tickAlert();
+  }
+
+  function tickAlert() {
+    var maintenant = Date.now();
+
+    if (alertPhase === 'shown' && maintenant >= alertJusqua) {
+      el.alert.classList.remove('is-on');
+      alertPhase = 'hiding';
+      alertJusqua = maintenant + 600;
+      return;
+    }
+    if (alertPhase === 'hiding' && maintenant >= alertJusqua) {
+      el.alert.classList.add('sb-alert--reserve');
+      alertPhase = 'idle';
+    }
+    if (alertPhase === 'idle' && alertQueue.length) {
+      el.alertText.textContent = alertQueue.shift();
+      el.alert.classList.remove('sb-alert--reserve');
+      // lecture forcee : declenche le recalcul de style sans passer par rAF
+      void el.alert.offsetWidth;
+      el.alert.classList.add('is-on');
+      alertPhase = 'shown';
+      alertJusqua = Date.now() + Math.max(1, F.alertDuration) * 1000;
+    }
+  }
+
+  /* ---------------------------------------------------------
+     Mini-alerte : « 5 subs  + 25 min », épinglée sur le timer.
+
+     Deux precautions heritees des bugs precedents :
+     - pilotage par HORODATAGE relu a chaque tick, jamais par des minuteries
+       chainees, pour rester juste dans un onglet en arriere-plan ;
+     - declenchement de la transition par lecture forcee du style, jamais par
+       requestAnimationFrame, qui est suspendu dans ces memes onglets.
+
+     Les credits sont AGREGES sur une courte fenetre : un gift bomb arrive en
+     dix events separes, on veut « 10 subs + 50 min » et non dix pilules.
+     --------------------------------------------------------- */
+  var miniCumul = null, miniJusqua = 0, miniFenetre = 0, dernierMiniId = '';
+
+  function dureeCourte(sec) {
+    sec = Math.round(sec);
+    if (sec < 60) return sec + ' s';
+    var m = Math.round(sec / 60);
+    if (m < 60) return m + ' min';
+    var h = Math.floor(m / 60), r = m % 60;
+    return r ? h + ' h ' + r : h + ' h';
+  }
+  function nomTier(t) {
+    return t === 'prime' ? 'prime' : t === '3000' ? 'T3' : t === '2000' ? 'T2' : '';
+  }
+  function libelleMini(a) {
+    var bouts = [], n;
+    if (a.subs) {
+      n = a.subs;
+      var tier = a.tier;
+      /* Un Prime ne peut pas etre offert sur Twitch. Si la source envoie
+         quand meme cette combinaison — l-emulateur de StreamElements le fait —
+         on tait le tier plutot que d-afficher « 1 prime offert ». */
+      if (a.offert === true && tier === 'prime') tier = '';
+      // un Prime non offert se nomme « 1 prime », pas « 1 sub prime »
+      var mot = tier === 'prime'
+        ? n + ' prime' + (n > 1 ? 's' : '')
+        : n + ' sub' + (n > 1 ? 's' : '') + (tier ? ' ' + tier : '');
+      // l-info « offert » compte autant que le tier pour la streameuse
+      if (a.offert === true) mot += n > 1 ? ' offerts' : ' offert';
+      bouts.push(mot);
+    }
+    if (a.bits) bouts.push(a.bits.toLocaleString('fr-FR') + ' bits');
+    if (a.tips) bouts.push('don');
+    return bouts.join(' · ');
+  }
+
+  function creditMini(genre, nombre, secondes, tier, id, offert) {
+    if (secondes <= 0) return;
+    var maintenant = Date.now();
+    if (!miniCumul || maintenant > miniFenetre) {
+      miniCumul = { subs: 0, bits: 0, tips: 0, sec: 0, tier: null, offert: null };
+    }
+    miniCumul[genre] += nombre;
+    miniCumul.sec += secondes;
+    if (genre === 'subs') {
+      var t = nomTier(tier);
+      // tiers melanges dans une meme salve : on n-affiche aucun tier
+      miniCumul.tier = miniCumul.tier === null ? t : (miniCumul.tier === t ? t : '');
+      // idem pour « offert » : melange offerts et non offerts, on se tait
+      miniCumul.offert = miniCumul.offert === null ? !!offert
+                       : (miniCumul.offert === !!offert ? !!offert : null);
+    }
+    miniFenetre = maintenant + 1500;
+    miniJusqua = maintenant + Math.max(1, num(F.miniDuration, 3)) * 1000;
+
+    /* Le detail part dans la sauvegarde : une instance qui n-a pas recu
+       l-event pourra afficher « 10 subs + 50 min » et pas seulement la duree.
+       L-identifiant vient de l-event lui-meme quand il en a un, de sorte que
+       deux instances ayant recu le meme event calculent le meme, et que
+       l-une n-affiche pas en double ce que l-autre a deja montre. */
+    dernierMiniId = String(id || ('loc' + maintenant));
+    S.miniLast = { subs: miniCumul.subs, bits: miniCumul.bits, tips: miniCumul.tips,
+                   sec: miniCumul.sec, tier: miniCumul.tier,
+                   offert: miniCumul.offert, id: dernierMiniId };
+
+    if (F.miniAlerts !== 'off' && el.mini) peindreMini();
+  }
+
+  function miniDepuis(ml) {          // detail recu d-une autre instance
+    if (F.miniAlerts === 'off' || !el.mini) return;
+    miniCumul = { subs: num(ml.subs, 0), bits: num(ml.bits, 0), tips: num(ml.tips, 0),
+                  sec: num(ml.sec, 0), tier: ml.tier || null,
+                  offert: ml.offert === true ? true : null };
+    miniFenetre = 0;
+    miniJusqua = Date.now() + Math.max(1, num(F.miniDuration, 3)) * 1000;
+    peindreMini();
+  }
+
+  function miniBrut(secondes) {         // credit dont on ignore l-origine
+    if (F.miniAlerts === 'off' || !el.mini || secondes <= 0) return;
+    miniCumul = { subs: 0, bits: 0, tips: 0, sec: secondes, tier: null };
+    miniFenetre = 0;
+    miniJusqua = Date.now() + Math.max(1, num(F.miniDuration, 3)) * 1000;
+    peindreMini();
+  }
+
+  function peindreMini() {
+    var texte = libelleMini(miniCumul);
+    el.mini.innerHTML = (texte ? '<b>' + texte + '</b>' : '') +
+                        '<i>+ ' + dureeCourte(miniCumul.sec) + '</i>';
+    // lecture forcee : declenche la transition sans passer par rAF
+    void el.mini.offsetWidth;
+    el.mini.classList.add('is-on');
+  }
+
+  function tickMini() {
+    if (miniJusqua && Date.now() >= miniJusqua) {
+      el.mini.classList.remove('is-on');
+      miniJusqua = 0;
+    }
+  }
+
+  /* ---------------------------------------------------------
+     Events StreamElements
+     --------------------------------------------------------- */
+  function tierOf(data) {
+    var t = String(data.tier || '1000').toLowerCase();
+    if (t.indexOf('prime') > -1) return 'prime';
+    if (t === '3000' || t === '3') return '3000';
+    if (t === '2000' || t === '2') return '2000';
+    return '1000';
+  }
+  function secForTier(t) {
+    return t === 'prime' ? F.secSubPrime
+         : t === '3000'  ? F.secSubT3
+         : t === '2000'  ? F.secSubT2
+         : F.secSubT1;
+  }
+  function ptsForTier(t) {
+    return t === 'prime' ? F.ptsSubPrime
+         : t === '3000'  ? F.ptsSubT3
+         : t === '2000'  ? F.ptsSubT2
+         : F.ptsSubT1;
+  }
+
+  function handle(listener, data) {
+    if (!listener || !data) return;
+
+    /* Anti-doublon, deux niveaux.
+
+       1. Les VRAIS events StreamElements portent un `_id` unique : c-est le
+          filtre principal, il couvre les reconnexions socket.
+       2. L-emulateur de l-editeur, lui, delivre le meme event DEUX FOIS —
+          une fois sous l-emballage de test, une fois sous sa forme normale —
+          et ses charges utiles n-ont pas d-`_id`. On retombe alors sur une
+          signature de contenu, valable 1,5 s seulement. Ce second filtre ne
+          se declenche jamais en production, puisque les vrais events ont
+          toujours leur `_id`. */
+    if (data._id) {
+      if (seen.indexOf(data._id) > -1) {
+        L(C_SKIP, 'ignoré : doublon (même _id déjà reçu)');
+        return;
+      }
+      seen.push(data._id);
+      if (seen.length > 120) seen.shift();
+    } else if (listener === 'subscriber-latest' || listener === 'cheer-latest' ||
+               listener === 'tip-latest') {
+      /* Uniquement sur les events qui creditent. Surtout PAS sur `message` :
+         deux commandes de chat identiques ont la meme signature, la seconde
+         serait avalee. */
+      var sig = listener + '|' + (data.name || '') + '|' + (data.amount || '') + '|' +
+                (data.tier || '') + '|' + (data.sender || '') + '|' +
+                (data.gifted ? 1 : 0) + (data.bulkGifted ? 1 : 0) + (data.isCommunityGift ? 1 : 0);
+      var maintenant = Date.now(), si, vu = null;
+      for (si = recents.length - 1; si >= 0; si--) {
+        // une signature n-expire qu-apres 20 s de silence
+        if (maintenant - recents[si].t > 20000) { recents.splice(si, 1); continue; }
+        if (recents[si].s === sig) vu = recents[si];
+      }
+
+      if (vu) {
+        if (maintenant - vu.t < 1500) {
+          L(C_SKIP, 'ignoré : event identique reçu il y a moins de 1,5 s et sans _id ' +
+                    '(l\'émulateur de l\'éditeur envoie deux fois le même)');
+          vu.t = maintenant;
+          return;
+        }
+        /* Garde-fou contre l-emballement. L-emulateur de l-editeur peut
+           reemettre le meme event en boucle pendant des minutes : sans cela,
+           un exemplaire passerait toutes les 1,5 s et le compteur monterait
+           sans fin. On tolere quatre occurrences identiques par tranche de
+           20 s — de quoi cliquer plusieurs fois de suite sur un bouton de
+           test — puis on coupe jusqu-a ce que la source se taise. */
+        /* Les charges utiles de l-emulateur portent `isTest`. Or son emulation
+           de gift bomb est buggee : elle envoie N fois le MEME destinataire au
+           lieu de N destinataires differents. Sur ces events-la, une seule
+           occurrence par signature suffit donc. Cliquer plusieurs fois sur un
+           bouton de test reste possible : l-emulateur tire un pseudo different
+           a chaque clic, donc la signature change. */
+        var maxIdentiques = (data.isTest === true) ? 1 : 4;
+        if (vu.n >= maxIdentiques) {
+          if (!vu.averti) {
+            L(C_WARN, 'RÉPÉTITION IGNORÉE : « ' + (data.name || '?') + ' » réémis à ' +
+                      'l\'identique sans _id' + (data.isTest ? ' (event de test)' : '') +
+                      '. Comptage suspendu pour cette signature jusqu\'à 20 s de silence. ' +
+                      'Il s\'agit de l\'émulateur de l\'éditeur, pas d\'un vrai event.');
+            vu.averti = true;
+          }
+          vu.t = maintenant;
+          return;
+        }
+        vu.n++;
+        vu.t = maintenant;
+      } else {
+        recents.push({ s: sig, t: maintenant, n: 1, averti: false });
+        if (recents.length > 60) recents.shift();
+      }
+    }
+
+    if (listener === 'subscriber-latest') {
+      var gifted = data.gifted === true || data.gifted === 'true';
+      var bulk = data.bulkGifted === true;
+      var community = data.isCommunityGift === true;
+      var tier = tierOf(data);
+
+      L(C_TITLE, 'SUB  tier=' + tier +
+                 ' · offert=' + (gifted ? 'OUI' : 'non') +
+                 ' · récapitulatif=' + (bulk ? 'OUI' : 'non') +
+                 ' · individuel=' + (community ? 'OUI' : 'non') +
+                 ' · amount=' + data.amount +
+                 (gifted && bulk ? ' (= nb de subs offerts)' : ' (= nb de mois, PAS un multiplicateur)'));
+
+      // dédup gift bomb : on choisit UNE source, jamais les deux
+      if (F.giftMode === 'individual' && bulk) {
+        L(C_SKIP, '     ignoré : récapitulatif écarté (mode « events individuels »)');
+        return;
+      }
+      if (F.giftMode === 'bulk' && community) {
+        L(C_SKIP, '     ignoré : event individuel écarté (mode « récapitulatif »)');
+        return;
+      }
+
+      // attention : data.amount = nb de MOIS sur un resub, nb de SUBS sur un récap
+      var count = (gifted && bulk) ? Math.max(1, parseInt(data.amount, 10) || 1) : 1;
+
+      var factorT = gifted ? F.giftTimeFactor : 1;
+      var factorP = gifted ? F.giftPointsFactor : 1;
+      L(C_INFO, '     compté comme ' + count + ' sub' + (count > 1 ? 's' : '') +
+                ' → ' + Math.round(secForTier(tier) * count * factorT) + ' s et ' +
+                (ptsForTier(tier) * count * factorP) + ' pt');
+
+      var secSub = secForTier(tier) * count * factorT;
+      addTime(secSub);
+      addPoints(ptsForTier(tier) * count * factorP);
+      creditMini('subs', count, secSub, tier,
+                 data._id || (data.name + '|' + data.amount), gifted);
+      L(C_INFO, '     état : ' + etat());
+      return;
+    }
+
+    if (listener === 'cheer-latest') {
+      var bits = num(data.amount, 0);
+      L(C_TITLE, 'CHEER  ' + bits + ' bits' + (data.name ? ' · ' + data.name : ''));
+      if (bits <= 0) { L(C_SKIP, '     ignoré : montant nul ou illisible'); return; }
+      L(C_INFO, '     ' + (bits / 100).toFixed(2) + ' × 100 bits → ' +
+                Math.round(bits / 100 * F.secPer100Bits) + ' s et ' +
+                (bits / 100 * F.ptsPer100Bits) + ' pt');
+      var secBits = bits / 100 * F.secPer100Bits;
+      addTime(secBits);
+      addPoints(bits / 100 * F.ptsPer100Bits);
+      creditMini('bits', bits, secBits, null, data._id || (data.name + '|' + bits));
+      L(C_INFO, '     état : ' + etat());
+      return;
+    }
+
+    if (listener === 'tip-latest') {
+      var amt = num(data.amount, 0);
+      L(C_TITLE, 'DON  ' + amt);
+      if (amt <= 0) { L(C_SKIP, '     ignoré : montant nul'); return; }
+      var secDon = amt * F.secPerTipUnit;
+      addTime(secDon);
+      addPoints(amt * F.ptsPerTipUnit);
+      creditMini('tips', 1, secDon, null, data._id || (data.name + '|' + amt));
+      L(C_INFO, '     état : ' + etat());
+      return;
+    }
+
+    if (listener === 'message') {
+      if (F.commandsEnabled === 'on') command(data);
+      return;
+    }
+
+    if (listener === 'kvstore:update') {
+      var kv = data.data || data;
+      if (F.instanceSync !== 'off' && kv && kv.key &&
+          String(kv.key).indexOf(F.storeKey) > -1) adopterEtat(kv.value);
+      return;
+    }
+
+    L(C_SKIP, 'non traité : « ' + listener + ' » (ce type d\'event n\'agit pas sur le subathon)');
+  }
+
+  /* ---------------------------------------------------------
+     Commandes chat (modérateurs + streamer)
+     --------------------------------------------------------- */
+  function parseDur(s) {
+    s = String(s || '').trim().toLowerCase();
+    var re = /(\d+(?:[.,]\d+)?)\s*(h|m|s)?/g, m, total = 0, found = false;
+    while ((m = re.exec(s)) !== null) {
+      found = true;
+      var v = parseFloat(m[1].replace(',', '.'));
+      total += v * (m[2] === 'h' ? 3600 : m[2] === 'm' ? 60 : 1);
+    }
+    return found ? total : null;
+  }
+  function command(ev) {
+    var d = ev.data || ev;
+    var text = String(d.text || '').trim();
+    if (text.charAt(0) !== '!') return;
+
+    var tags = d.tags || {};
+    var badges = String(tags.badges || '');
+    var pseudo = String(d.nick || d.displayName || d.username || '').toLowerCase();
+
+    /* Par defaut, SEULE la proprietaire de la chaine commande le subathon.
+       On la reconnait a son badge de diffuseur ou a son pseudo, qui est
+       toujours identique au nom de la chaine sur Twitch. Les moderateurs
+       n-ont aucun pouvoir sauf si le champ le prevoit explicitement. */
+    var proprietaire = badges.indexOf('broadcaster') > -1 ||
+                       (CHAINE !== '' && pseudo === CHAINE);
+    var moderateur = tags.mod === '1' || tags.mod === 1 ||
+                     badges.indexOf('moderator') > -1;
+
+    var autorise = proprietaire ||
+                   (F.commandsWho === 'ownerAndMods' && moderateur);
+    if (!autorise) {
+      L(C_WARN, 'commande refusée : « ' + text +' » de ' + (pseudo || 'inconnu') +
+                ' — réservée à ' + (F.commandsWho === 'ownerAndMods'
+                                    ? 'la streameuse et ses modérateurs'
+                                    : 'la streameuse'));
+      return;
+    }
+
+    var p = text.split(/\s+/);
+    var cmd = p[0].toLowerCase();
+
+    // raccourcis : plus courts a taper a 4 h du matin
+    if (cmd === '!pause')  { L(C_TITLE, 'commande : mise en pause'); return setPaused(true); }
+    if (cmd === '!resume' || cmd === '!reprendre') {
+      L(C_TITLE, 'commande : reprise'); return setPaused(false);
+    }
+
+    if (cmd === '!timer') {
+      var sub = (p[1] || '').toLowerCase();
+      if (sub === 'pause')  return setPaused(true);
+      if (sub === 'resume' || sub === 'start') return setPaused(false);
+      if (sub === 'set')    { var v = parseDur(p.slice(2).join('')); if (v !== null) setTime(v); return; }
+      var raw = p.slice(1).join('');
+      var sign = raw.charAt(0) === '-' ? -1 : 1;
+      var dur = parseDur(raw);
+      if (dur !== null) addTime(sign * dur);
+      return;
+    }
+    if (cmd === '!points') {
+      var s2 = (p[1] || '').toLowerCase();
+      if (s2 === 'set') { nouvelleEpoque(); S.points = Math.max(0, num(p[2], S.points));
+                         save(); syncGoals(false); return; }
+      var delta = num(p[1], 0);
+      if (delta) addPoints(delta);
+      return;
+    }
+    if (cmd === '!subathon' && (p[1] || '').toLowerCase() === 'reset') {
+      nouvelleEpoque();
+      S.points = 0; S.windowStart = 0; S.paused = false;
+      setTime(F.startHours * 3600 + F.startMinutes * 60);
+      syncGoals(false);
+    }
+  }
+
+  /* ---------------------------------------------------------
+     Simulation — utilisée par le panneau de test ET par le harness
+     Les payloads reproduisent exactement ceux de StreamElements,
+     gift bomb comprise (récap + events individuels).
+     --------------------------------------------------------- */
+  function emit(listener, payload) {
+    // _id unique : deux clics identiques sur le panneau de test doivent bien
+    // compter deux fois, sans quoi la simulation deviendrait trompeuse
+    payload._id = 'sim_' + (++simSeq);
+    window.dispatchEvent(new CustomEvent('onEventReceived', {
+      detail: { listener: listener, event: payload }
+    }));
+  }
+  var sim = {
+    sub: function (tier, months, name) {
+      emit('subscriber-latest', {
+        name: name || 'TestViewer', amount: months || 1, tier: tier || '1000',
+        gifted: false, message: 'test sub'
+      });
+    },
+    gift: function (tier, sender) {
+      emit('subscriber-latest', {
+        name: 'LuckyViewer', sender: sender || 'Gifter', amount: 1,
+        tier: tier || '1000', gifted: true, bulkGifted: false, isCommunityGift: false
+      });
+    },
+    giftbomb: function (count, tier, sender) {
+      count = count || 5; tier = tier || '1000'; sender = sender || 'BigGifter';
+      emit('subscriber-latest', {
+        name: sender, sender: sender, amount: count, tier: tier,
+        gifted: true, bulkGifted: true, isCommunityGift: false
+      });
+      for (var i = 0; i < count; i++) {
+        emit('subscriber-latest', {
+          name: 'Gifted_' + (i + 1), sender: sender, amount: 1, tier: tier,
+          gifted: true, bulkGifted: false, isCommunityGift: true
+        });
+      }
+    },
+    cheer: function (bits, name) {
+      emit('cheer-latest', { name: name || 'Cheerer', amount: bits || 100, message: 'cheer!' });
+    },
+    tip: function (amount) {
+      emit('tip-latest', { name: 'Tipper', amount: amount || 5, currency: 'EUR', message: '' });
+    },
+    chaos: function (n) {
+      n = n || 12;
+      for (var i = 0; i < n; i++) {
+        (function (i) {
+          setTimeout(function () {
+            var r = Math.random();
+            if (r < .35) sim.sub(['1000', '2000', '3000', 'prime'][i % 4], 1 + (i % 12));
+            else if (r < .6) sim.gift();
+            else if (r < .8) sim.giftbomb(1 + Math.floor(Math.random() * 8));
+            else sim.cheer([100, 500, 1000, 5000][i % 4]);
+          }, i * 220);
+        })(i);
+      }
+    }
+  };
+
+  /* ---------------------------------------------------------
+     Panneau de test intégré (field "Mode test")
+     --------------------------------------------------------- */
+  function buildDebug() {
+    if (document.getElementById('sb-debug')) return;
+    var box = document.createElement('div');
+    box.id = 'sb-debug';
+    box.className = 'sb-debug';
+    box.innerHTML =
+      '<h4>Mode test</h4>' +
+      '<div class="sb-row" data-g="subs"></div>' +
+      '<div class="sb-row" data-g="gifts"></div>' +
+      '<div class="sb-row" data-g="bits"></div>' +
+      '<div class="sb-row" data-g="ctrl"></div>' +
+      '<div class="sb-out" id="sb-dbg-out"></div>';
+    document.body.appendChild(box);
+
+    var mk = function (group, label, fn, cls) {
+      var b = document.createElement('button');
+      b.textContent = label;
+      if (cls) b.className = cls;
+      b.onclick = fn;
+      box.querySelector('[data-g="' + group + '"]').appendChild(b);
+    };
+    mk('subs', 'T1',    function () { sim.sub('1000'); });
+    mk('subs', 'T2',    function () { sim.sub('2000'); });
+    mk('subs', 'T3',    function () { sim.sub('3000'); });
+    mk('subs', 'Prime', function () { sim.sub('prime'); });
+    mk('subs', 'Resub 24m', function () { sim.sub('1000', 24); });
+
+    mk('gifts', 'Gift x1',  function () { sim.gift(); });
+    mk('gifts', 'Bomb x5',  function () { sim.giftbomb(5); });
+    mk('gifts', 'Bomb x25', function () { sim.giftbomb(25); });
+
+    mk('bits', '100 bits',  function () { sim.cheer(100); });
+    mk('bits', '1k bits',   function () { sim.cheer(1000); });
+    mk('bits', '10k bits',  function () { sim.cheer(10000); });
+    mk('bits', 'Tip 5',     function () { sim.tip(5); });
+
+    mk('ctrl', '+1 min', function () { addTime(60); });
+    mk('ctrl', '-1 min', function () { addTime(-60); });
+    mk('ctrl', 'Pause',  function () { setPaused(!S.paused); });
+    mk('ctrl', 'Chaos',  function () { sim.chaos(14); });
+    mk('ctrl', 'Reset',  function () {
+      S.points = 0; S.windowStart = 0; S.paused = false;
+      setTime(F.startHours * 3600 + F.startMinutes * 60);
+      syncGoals(false);
+    }, 'sb-warn');
+
+    setInterval(function () {
+      var o = document.getElementById('sb-dbg-out');
+      if (o) o.textContent = 'points ' + Math.round(S.points) +
+        ' · fenêtre ' + S.windowStart + ' · ' + (S.paused ? 'pause' : 'run');
+    }, 400);
+  }
+
+  /* ---------------------------------------------------------
+     Application des Fields
+     --------------------------------------------------------- */
+  function loadFont(name) {
+    if (!name) return;
+    var id = 'sb-font-link', l = document.getElementById(id);
+    if (!l) { l = document.createElement('link'); l.id = id; l.rel = 'stylesheet'; document.head.appendChild(l); }
+    l.href = 'https://fonts.googleapis.com/css2?family=' +
+             encodeURIComponent(name).replace(/%20/g, '+') +
+             ':wght@400;500;600;700&display=swap';
+    el.root.style.setProperty('--font', "'" + name + "', 'Fredoka', sans-serif");
+  }
+  /* Orientation de la fronde du coin haut-gauche. Chaque transformation depose
+     la tige a une hauteur differente : `dy` la ramene sur le lisere. */
+  var TL_MODES = {
+    rot180:  { t: 'rotate(180 60 60)',            dy: 0   },
+    mirrorh: { t: 'translate(120,0) scale(-1,1)', dy: -12 },
+    mirrorv: { t: 'translate(0,120) scale(1,-1)', dy: 0   },
+    none:    { t: '',                             dy: -12 }
+  };
+  function applyTlOrientation() {
+    var m = TL_MODES[F.tlOrientation] || TL_MODES.rot180;
+    var g = document.getElementById('sb-tl-flip');
+    if (g) g.setAttribute('transform', m.t);
+    el.root.style.setProperty('--tl-dy', (m.dy * F.foliageSize / 120).toFixed(1) + 'px');
+  }
+
+  function hexToRgb(h) {
+    h = String(h || '').trim();
+    var m = h.match(/rgba?\(([^)]+)\)/i);          // SE peut renvoyer rgb()/rgba()
+    if (m) return m[1].split(',').slice(0, 3).map(function (v) {
+      return Math.round(parseFloat(v)) || 0;
+    }).join(',');
+    h = h.replace('#', '');
+    if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
+    var n = parseInt(h, 16);
+    if (isNaN(n)) return '255,251,243';
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255].join(',');
+  }
+  function applyFields(fd) {
+    for (var key in D) if (fd && fd[key] !== undefined && fd[key] !== '') F[key] = fd[key];
+    ['scale','startHours','startMinutes','maxHours','beatSeconds','secSubT1','secSubT2','secSubT3',
+     'secSubPrime','giftTimeFactor','secPer100Bits','secPerTipUnit','ptsSubT1','ptsSubT2',
+     'ptsSubT3','ptsSubPrime','giftPointsFactor','ptsPer100Bits','ptsPerTipUnit',
+     'goalsVisible','goalFontSize','goalsKeepDone','rotateDelay','alertDuration','miniDuration','alertBgOpacity',
+     'glowOpacity','glowSize','foliageSize','windAmp','windBob','windSpeed'
+    ].forEach(function (n) { F[n] = num(F[n], D[n]); });
+
+    var s = el.root.style;
+    s.setProperty('--scale', F.scale);
+    s.setProperty('--goal-font', F.goalFontSize + 'px');
+    s.setProperty('--cream', F.creamColor);
+    s.setProperty('--olive', F.oliveColor);
+    s.setProperty('--leaf-1', F.leaf1Color);
+    s.setProperty('--leaf-2', F.leaf2Color);
+    s.setProperty('--leaf-3', F.leaf3Color);
+    s.setProperty('--stem', F.leaf2Color);
+    s.setProperty('--alert-bg', hexToRgb(F.alertBgColor));
+    // un seul reglage pilote le fond : la classe retire aussi le retrait droit
+    // de la pilule, sans quoi le texte flotterait a droite dans le vide
+    s.setProperty('--alert-bg-a', F.alertBgOpacity / 100);
+    el.alert.classList.toggle('sb-alert--nobg', F.alertBackground === 'off');
+    s.setProperty('--alert-ink', F.alertTextColor);
+    s.setProperty('--glow', F.glowColor);
+    s.setProperty('--glow-rgb', hexToRgb(F.glowColor));
+    s.setProperty('--glow-a', F.glowOpacity / 100);
+    s.setProperty('--glow-size', F.glowSize + 'px');
+    s.setProperty('--foliage-size', F.foliageSize + 'px');
+    s.setProperty('--wind-amp', (F.windAmp / 100 * 2.6).toFixed(2) + 'deg');
+    s.setProperty('--wind-bob', (F.windBob / 100 * 3.4).toFixed(2) + 'px');
+    s.setProperty('--wind-dur', (5.2 - F.windSpeed / 100 * 3).toFixed(2) + 's');
+    loadFont(F.fontFamily);
+
+    applyTlOrientation();
+    goals = parseGoals(F.goalsList);
+    el.alertText.textContent = F.alertText;
+  }
+
+  /* ---------------------------------------------------------
+     Démarrage
+     --------------------------------------------------------- */
+  /* Plusieurs instances du widget peuvent tourner en meme temps — l-editeur
+     StreamElements et la source OBS, par exemple — et elles partagent la meme
+     sauvegarde. Sans cela, chacune garde son compteur en memoire et il faut
+     rafraichir pour les remettre d-accord. On ecoute donc `kvstore:update`,
+     que StreamElements emet a chaque ecriture, pour adopter l-etat a chaud. */
+  function adopterEtat(v) {
+    if (!v || typeof v !== 'object' || typeof v.endsAt !== 'number') return;
+    if (v.by === INSTANCE) return;                    // echo de notre propre ecriture
+
+    /* Pas de comparaison de numero de version entre instances : chacune
+       incremente le sien de son cote, ils ne sont pas comparables. On fusionne
+       plutot au MAXIMUM, une operation qui donne le meme resultat quel que soit
+       l-ordre d-arrivee des messages. Un point acquis ne peut donc jamais se
+       perdre, et une instance qui a rate des events rattrape automatiquement.
+
+       Seule exception : les actions VOLONTAIRES — reset, pause, retrait de
+       temps — portent une « epoque » superieure et s-imposent telles quelles,
+       car elles doivent pouvoir faire redescendre le compteur. */
+    var vEpoque = num(v.epoch, 0);
+    var volontaire = vEpoque > num(S.epoch, 0);
+    if (!volontaire && vEpoque < num(S.epoch, 0)) return;   // etat d-avant notre reset
+
+    var avant = firstIncomplete();
+    var pointsAvant = S.points, finAvant = S.endsAt, pauseAvant = S.paused;
+
+    if (volontaire) {
+      S.endsAt      = v.endsAt;
+      S.paused      = !!v.paused;
+      S.pauseRemain = num(v.pauseRemain, 0);
+      S.points      = num(v.points, 0);
+      S.windowStart = num(v.windowStart, 0);
+      S.epoch       = vEpoque;
+    } else {
+      S.points      = Math.max(S.points, num(v.points, 0));
+      S.endsAt      = Math.max(S.endsAt, v.endsAt);
+      S.windowStart = Math.max(S.windowStart, num(v.windowStart, 0));
+    }
+
+    var change = S.points !== pointsAvant || S.endsAt !== finAvant ||
+                 S.paused !== pauseAvant;
+    var enAvance = !volontaire &&
+                   (S.points > num(v.points, 0) || S.endsAt > v.endsAt);
+
+    if (change) {
+      var apres = firstIncomplete();
+      el.timer.classList.toggle('is-paused', S.paused);
+      paintTimer();
+      syncGoals(false);
+      for (var i = avant; i < apres && i < goals.length; i++) {
+        L(C_TITLE, '     ✔ OBJECTIF ATTEINT : « ' + goals[i].label +
+                   ' » (' + goals[i].value + ')');
+        pushAlert(String(F.alertText).replace(/\{goal\}/gi, goals[i].label));
+      }
+      if (apres > avant) scheduleRotate();
+      // Cette instance n-a pas recu l-event : elle affiche le gain sans en
+      // connaitre l-origine. Si elle l-avait recu, les valeurs seraient deja
+      // egales et on ne passerait pas ici — donc aucun doublon possible.
+      if (!volontaire && S.endsAt > finAvant + 1000) {
+        var ml = v.miniLast;
+        if (ml && ml.id && String(ml.id) !== dernierMiniId) {
+          dernierMiniId = String(ml.id);
+          miniDepuis(ml);                       // détail complet
+        } else if (!ml) {
+          miniBrut((S.endsAt - finAvant) / 1000);   // sauvegarde d'une ancienne version
+        }
+      }
+      L(C_INFO, (volontaire ? 'état imposé par une autre instance : '
+                            : 'état rattrapé sur une autre instance : ') + etat());
+    }
+    // en avance : on republie pour que l-autre instance nous rattrape
+    if (enAvance) save();
+  }
+
+  function boot(fieldData) {
+    if (initStarted) { applyFields(fieldData); syncGoals(true); return; }
+    initStarted = true;
+
+    el.root      = $('#sb-root');
+    el.alert     = $('#sb-alert');
+    el.alertText = $('#sb-alert-text');
+    el.timer     = $('#sb-timer');
+    el.counter   = $('#sb-counter');
+    el.goals     = $('#sb-goals');
+    el.mini      = $('#sb-mini');
+    if (!el.root) return;
+
+    el.alert.classList.add('sb-alert--reserve');
+    applyFields(fieldData);
+
+    loadState(function (stored) {
+      if (stored) {
+        S.endsAt      = stored.endsAt || 0;
+        S.paused      = !!stored.paused;
+        S.pauseRemain = stored.pauseRemain || 0;
+        S.points      = num(stored.points, 0);
+        S.windowStart = num(stored.windowStart, 0);
+        S.rev         = num(stored.rev, 0);
+        S.epoch       = num(stored.epoch, 0);
+
+        /* Le widget n-a pas tourne pendant un moment : on restitue le temps
+           restant tel qu-il etait au dernier battement, comme si le chrono
+           avait ete en pause. Le seuil evite de declencher sur un simple
+           rechargement de page, qui ne prend qu-une poignee de secondes. */
+        var battement = num(stored.beat, 0);
+        var seuil = Math.max(20, num(F.beatSeconds, 30) * 2.5) * 1000;
+        if (F.offlineBehaviour !== 'run' && !S.paused && battement > 0) {
+          var absence = Date.now() - battement;
+          var restantAlors = stored.endsAt - battement;
+          if (absence > seuil && restantAlors > 0) {
+            S.endsAt = Date.now() + restantAlors;
+            L(C_TITLE, 'absence de ' + fmt(absence) + ' détectée — chrono repris à ' +
+                       fmt(restantAlors) + ', ce temps n\'a pas été décompté');
+          }
+        }
+      } else {
+        S.endsAt = Date.now() + (F.startHours * 3600 + F.startMinutes * 60) * 1000;
+      }
+      S.booted = true;
+      el.timer.classList.toggle('is-paused', S.paused);
+      paintTimer();
+      syncGoals(true);
+      setInterval(function () { paintTimer(); tickAlert(); tickMini(); }, 250);
+
+      /* Premiere sauvegarde tout de suite : sans elle, un redemarrage d-OBS
+         survenu avant le premier battement — ou avant le premier event —
+         retrouverait un magasin vide et repartirait de la duree initiale. */
+      saveNow();
+
+      // battement regulier, seulement si rien n-a ete ecrit entre-temps
+      setInterval(function () {
+        if (F.offlineBehaviour === 'run') return;
+        if (Date.now() - derniereEcriture >= num(F.beatSeconds, 30) * 1000) save();
+      }, 5000);
+      if (F.debugPanel === 'on') buildDebug();
+      L(C_TITLE, '═══ WIDGET PRÊT ═══');
+      L(C_INFO, 'sauvegarde restaurée : ' + (stored ? 'OUI' : 'non (démarrage à neuf)') +
+                ' · clé « ' + F.storeKey + ' »');
+      L(C_INFO, 'objectifs chargés : ' + goals.length +
+                ' · premier palier : ' + (goals[0] ? goals[0].value : '—'));
+      L(C_INFO, 'temps par sub : T1 ' + F.secSubT1 + ' s · T2 ' + F.secSubT2 +
+                ' s · T3 ' + F.secSubT3 + ' s · Prime ' + F.secSubPrime + ' s');
+      L(C_INFO, 'points par sub : T1 ' + F.ptsSubT1 + ' · T2 ' + F.ptsSubT2 +
+                ' · T3 ' + F.ptsSubT3 + ' · Prime ' + F.ptsSubPrime +
+                ' · subs offerts ×' + F.giftPointsFactor);
+      L(C_INFO, 'bits : ' + F.secPer100Bits + ' s et ' + F.ptsPer100Bits +
+                ' pt par tranche de 100');
+      L(C_INFO, 'comptage des gift bombs : ' + F.giftMode);
+      L(C_INFO, 'commandes chat : ' + (F.commandsEnabled === 'off' ? 'désactivées'
+                : (F.commandsWho === 'ownerAndMods' ? 'streameuse + modérateurs'
+                                                    : 'streameuse UNIQUEMENT')) +
+                (CHAINE ? ' · chaîne « ' + CHAINE + ' »' : ''));
+      L(C_INFO, 'coupures : ' + (F.offlineBehaviour === 'run'
+                ? 'le chrono continue de tourner'
+                : 'le chrono s\'arrête quand le widget ne tourne pas'));
+      L(stored ? C_WARN : C_INFO, 'état de départ : ' + etat() +
+        (stored && S.points > 0 ? '   ← points hérités de tests précédents, « !subathon reset » pour repartir de zéro' : ''));
+    });
+  }
+
+  /* ---------------------------------------------------------
+     Branchement StreamElements
+     --------------------------------------------------------- */
+  window.addEventListener('onWidgetLoad', function (obj) {
+    var det = obj && obj.detail;
+    if (det && det.channel && det.channel.username) {
+      CHAINE = String(det.channel.username).toLowerCase();
+    }
+    boot((det && det.fieldData) || {});
+  });
+
+  window.addEventListener('onEventReceived', function (obj) {
+    if (!obj.detail) return;
+    var listener = obj.detail.listener;
+    var data = obj.detail.event;
+    if (!data) return;
+
+    var emballe = false;
+    // les events de TEST de StreamElements sont emballés différemment
+    if (data.listener) { listener = data.listener; data = data.event || data; emballe = true; }
+
+    if (listener !== 'message') {
+      Lraw('◄ reçu  « ' + listener + ' »' +
+           (emballe ? '  (emballage de test StreamElements)' : '  (event réel)') +
+           '  — charge utile :', data);
+    }
+
+    if (data.itemId !== undefined) {
+      L(C_SKIP, 'ignoré : achat boutique (itemId présent)');
+      return;
+    }
+
+    handle(listener, data);
+  });
+
+  // API publique : console SE, harness local, ou overlay en direct.
+  // @ts-ignore — propriété ajoutée volontairement à window ; TypeScript ne
+  // connaît pas cette clé, mais StreamElements exécute du JavaScript pur.
+  window.SUBATHON = {
+    simulate: sim,
+    addTime: addTime,
+    setTime: setTime,
+    setPaused: setPaused,
+    addPoints: addPoints,
+    state: function () { return S; },
+    fields: function () { return F; },
+    boot: boot
+  };
+
+  // hors StreamElements (test local ouvert directement), on démarre seul
+  setTimeout(function () { if (!S.booted) boot({}); }, 700);
+})();

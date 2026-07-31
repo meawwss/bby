@@ -1,0 +1,455 @@
+{
+  "scale": {
+    "type": "number",
+    "label": "Échelle globale (1 = taille de référence)",
+    "value": 1,
+    "step": 0.05,
+    "min": 0.3,
+    "max": 3,
+    "group": "Général"
+  },
+  "fontFamily": {
+    "type": "text",
+    "label": "Police Google Fonts",
+    "value": "Fredoka",
+    "group": "Général"
+  },
+  "storeKey": {
+    "type": "text",
+    "label": "Clé de sauvegarde (changer = repartir de zéro)",
+    "value": "subathon_v1",
+    "group": "Général"
+  },
+  "debugPanel": {
+    "type": "dropdown",
+    "label": "Mode test (panneau de simulation dans l'overlay)",
+    "value": "off",
+    "options": {
+      "off": "Désactivé (production)",
+      "on": "Activé"
+    },
+    "group": "Général"
+  },
+  "commandsEnabled": {
+    "type": "dropdown",
+    "label": "Commandes chat (!pause, !timer, !subathon reset)",
+    "value": "on",
+    "options": {
+      "on": "Activées",
+      "off": "Désactivées"
+    },
+    "group": "Général"
+  },
+  "commandsWho": {
+    "type": "dropdown",
+    "label": "Qui peut les utiliser",
+    "value": "owner",
+    "options": {
+      "owner": "La streameuse uniquement (recommandé)",
+      "ownerAndMods": "La streameuse et ses modérateurs"
+    },
+    "group": "Général"
+  },
+  "consoleLogs": {
+    "type": "dropdown",
+    "label": "Journal détaillé dans la console (F12)",
+    "value": "on",
+    "options": {
+      "on": "Activé",
+      "off": "Désactivé"
+    },
+    "group": "Général"
+  },
+  "instanceSync": {
+    "type": "dropdown",
+    "label": "Synchroniser les instances ouvertes en même temps",
+    "value": "on",
+    "options": {
+      "on": "Activée",
+      "off": "Désactivée"
+    },
+    "group": "Général"
+  },
+  "startHours": {
+    "type": "number",
+    "label": "Durée de départ — heures",
+    "value": 2,
+    "step": 1,
+    "min": 0,
+    "group": "Timer"
+  },
+  "startMinutes": {
+    "type": "number",
+    "label": "Durée de départ — minutes",
+    "value": 30,
+    "step": 1,
+    "min": 0,
+    "max": 59,
+    "group": "Timer"
+  },
+  "maxHours": {
+    "type": "number",
+    "label": "Plafond en heures (0 = illimité)",
+    "value": 0,
+    "step": 1,
+    "min": 0,
+    "group": "Timer"
+  },
+  "offlineBehaviour": {
+    "type": "dropdown",
+    "label": "Quand le widget ne tourne pas (OBS fermé)",
+    "value": "pause",
+    "options": {
+      "pause": "Le chrono s'arrête — le temps hors ligne n'est pas décompté",
+      "run": "Le chrono continue de tourner"
+    },
+    "group": "Timer"
+  },
+  "beatSeconds": {
+    "type": "number",
+    "label": "Précision de la détection d'absence (secondes)",
+    "value": 30,
+    "step": 5,
+    "min": 10,
+    "max": 120,
+    "group": "Timer"
+  },
+  "secSubT1": {
+    "type": "number",
+    "label": "Secondes — sub Tier 1",
+    "value": 300,
+    "step": 10,
+    "group": "Temps ajouté"
+  },
+  "secSubT2": {
+    "type": "number",
+    "label": "Secondes — sub Tier 2",
+    "value": 600,
+    "step": 10,
+    "group": "Temps ajouté"
+  },
+  "secSubT3": {
+    "type": "number",
+    "label": "Secondes — sub Tier 3",
+    "value": 1500,
+    "step": 10,
+    "group": "Temps ajouté"
+  },
+  "secSubPrime": {
+    "type": "number",
+    "label": "Secondes — sub Prime",
+    "value": 300,
+    "step": 10,
+    "group": "Temps ajouté"
+  },
+  "giftTimeFactor": {
+    "type": "number",
+    "label": "Multiplicateur de temps sur les subs offerts",
+    "value": 1,
+    "step": 0.1,
+    "min": 0,
+    "group": "Temps ajouté"
+  },
+  "secPer100Bits": {
+    "type": "number",
+    "label": "Secondes par tranche de 100 bits",
+    "value": 60,
+    "step": 5,
+    "group": "Temps ajouté"
+  },
+  "secPerTipUnit": {
+    "type": "number",
+    "label": "Secondes par unité de don (1 € / 1 $)",
+    "value": 30,
+    "step": 5,
+    "group": "Temps ajouté"
+  },
+  "ptsSubT1": {
+    "type": "number",
+    "label": "Points — sub Tier 1",
+    "value": 1,
+    "step": 1,
+    "group": "Progression des goals"
+  },
+  "ptsSubT2": {
+    "type": "number",
+    "label": "Points — sub Tier 2",
+    "value": 2,
+    "step": 1,
+    "group": "Progression des goals"
+  },
+  "ptsSubT3": {
+    "type": "number",
+    "label": "Points — sub Tier 3",
+    "value": 5,
+    "step": 1,
+    "group": "Progression des goals"
+  },
+  "ptsSubPrime": {
+    "type": "number",
+    "label": "Points — sub Prime",
+    "value": 1,
+    "step": 1,
+    "group": "Progression des goals"
+  },
+  "giftPointsFactor": {
+    "type": "number",
+    "label": "Multiplicateur de points sur les subs offerts",
+    "value": 1,
+    "step": 0.1,
+    "min": 0,
+    "group": "Progression des goals"
+  },
+  "ptsPer100Bits": {
+    "type": "number",
+    "label": "Points par tranche de 100 bits (0 = les bits ne comptent pas)",
+    "value": 0,
+    "step": 0.5,
+    "group": "Progression des goals"
+  },
+  "ptsPerTipUnit": {
+    "type": "number",
+    "label": "Points par unité de don",
+    "value": 0,
+    "step": 0.5,
+    "group": "Progression des goals"
+  },
+  "goalsList": {
+    "type": "text",
+    "label": "Objectifs — « nom|palier » séparés par des points-virgules. Paliers CUMULÉS et croissants.",
+    "value": "Killer roulette (DBD)|5; Game viewers avec perks aléatoires|10; Battle royale 3 facts 1 lie sur moi|25; Jeu du crabe sur Roblox|50; Petite radio horreur|75; 1v1 viewers (DBD, LoL ou échecs)|100; Smash or pass (persos fictifs edition)|125; Tournoi de musique avec cadeau!|150; Pick random sur LoL (en classé)|175; Aventure jeu solo au choix|200; Lecture creepypastas|225; ASMR + squishy jusqu'au prochain palier|250; Je mange des buldak avec toute la sauce qui pique|300; On lit mes demandes de DM|325; Giveaway cartes cadeaux Steam ou Riot|350; Je me transforme en trad goth|400; Popsauce|425; Jeu d'horreur dans le noir|450; On fait un puzzle (repos)|500; Serveur communautaire Minecraft|600; Live IRL à la salle|700; Je me teins les cheveux en rose|800; Je crée un compte cosplay + cosplay au choix|900; Je rajoute 24 h + nouveaux goals|1000",
+    "group": "Objectifs"
+  },
+  "goalsVisible": {
+    "type": "number",
+    "label": "Nombre d'objectifs affichés",
+    "value": 4,
+    "step": 1,
+    "min": 1,
+    "max": 8,
+    "group": "Objectifs"
+  },
+  "goalFontSize": {
+    "type": "number",
+    "label": "Taille du texte des objectifs (px)",
+    "value": 21,
+    "step": 1,
+    "min": 12,
+    "max": 30,
+    "group": "Objectifs"
+  },
+  "longLabels": {
+    "type": "dropdown",
+    "label": "Objectifs — libellés trop longs pour la ligne",
+    "value": "shrink",
+    "options": {
+      "shrink": "Réduire la police de la ligne (recommandé)",
+      "scroll": "Faire défiler doucement",
+      "clip": "Tronquer avec des points de suspension"
+    },
+    "group": "Objectifs"
+  },
+  "goalsMode": {
+    "type": "dropdown",
+    "label": "Défilement de la liste",
+    "value": "batch",
+    "options": {
+      "batch": "Par fournée (on passe aux 4 suivants quand les 4 sont barrés)",
+      "slide": "Glissant (un objectif entre dès qu'un autre est barré)"
+    },
+    "group": "Objectifs"
+  },
+  "goalsKeepDone": {
+    "type": "number",
+    "label": "Mode glissant — objectifs barrés gardés à l'écran",
+    "value": 2,
+    "step": 1,
+    "min": 0,
+    "max": 6,
+    "group": "Objectifs"
+  },
+  "rotateDelay": {
+    "type": "number",
+    "label": "Délai avant défilement (secondes)",
+    "value": 6,
+    "step": 1,
+    "min": 0,
+    "group": "Objectifs"
+  },
+  "alertText": {
+    "type": "text",
+    "label": "Texte de l'alerte ({goal} = nom de l'objectif)",
+    "value": "un objectif est atteint!",
+    "group": "Alerte"
+  },
+  "alertDuration": {
+    "type": "number",
+    "label": "Durée d'affichage (secondes)",
+    "value": 6,
+    "step": 1,
+    "min": 1,
+    "group": "Alerte"
+  },
+  "miniAlerts": {
+    "type": "dropdown",
+    "label": "Mini-alerte de gain de temps sur le timer",
+    "value": "on",
+    "options": {
+      "on": "Affichée",
+      "off": "Masquée"
+    },
+    "group": "Alerte"
+  },
+  "miniDuration": {
+    "type": "number",
+    "label": "Durée de la mini-alerte (secondes)",
+    "value": 3,
+    "step": 1,
+    "min": 1,
+    "max": 15,
+    "group": "Alerte"
+  },
+  "alertBackground": {
+    "type": "dropdown",
+    "label": "Fond de l'alerte « un objectif est atteint »",
+    "value": "off",
+    "options": {
+      "on": "Affiché",
+      "off": "Aucun fond — icône et texte seuls"
+    },
+    "group": "Alerte"
+  },
+  "alertBgColor": {
+    "type": "colorpicker",
+    "label": "Fond de l'alerte",
+    "value": "#FFFBF3",
+    "group": "Alerte"
+  },
+  "alertBgOpacity": {
+    "type": "number",
+    "label": "Opacité du fond de l'alerte (%)",
+    "value": 55,
+    "step": 1,
+    "min": 0,
+    "max": 100,
+    "group": "Alerte"
+  },
+  "alertTextColor": {
+    "type": "colorpicker",
+    "label": "Couleur du texte et du cœur de l'alerte",
+    "value": "#515731",
+    "group": "Alerte"
+  },
+  "creamColor": {
+    "type": "colorpicker",
+    "label": "Crème (fond des cartes)",
+    "value": "#FFFBF3",
+    "group": "Couleurs"
+  },
+  "oliveColor": {
+    "type": "colorpicker",
+    "label": "Olive (boîte du timer + typo)",
+    "value": "#767E4B",
+    "group": "Couleurs"
+  },
+  "leaf1Color": {
+    "type": "colorpicker",
+    "label": "Vert principal (icône, feuilles, halo)",
+    "value": "#ABC776",
+    "group": "Couleurs"
+  },
+  "leaf2Color": {
+    "type": "colorpicker",
+    "label": "Vert d'ombre (tiges)",
+    "value": "#9BBB63",
+    "group": "Couleurs"
+  },
+  "leaf3Color": {
+    "type": "colorpicker",
+    "label": "Vert clair",
+    "value": "#C2D897",
+    "group": "Couleurs"
+  },
+  "glowColor": {
+    "type": "colorpicker",
+    "label": "Liseré autour de la carte",
+    "value": "#B4CC80",
+    "group": "Couleurs"
+  },
+  "glowOpacity": {
+    "type": "number",
+    "label": "Opacité du liseré (%)",
+    "value": 100,
+    "step": 1,
+    "min": 0,
+    "max": 100,
+    "group": "Couleurs"
+  },
+  "glowSize": {
+    "type": "number",
+    "label": "Épaisseur du liseré (px)",
+    "value": 7,
+    "step": 1,
+    "min": 0,
+    "max": 24,
+    "group": "Couleurs"
+  },
+  "foliageSize": {
+    "type": "number",
+    "label": "Taille des frondes de feuillage (px)",
+    "value": 76,
+    "step": 2,
+    "min": 0,
+    "max": 160,
+    "group": "Couleurs"
+  },
+  "windAmp": {
+    "type": "number",
+    "label": "Vent — amplitude (0 = immobile)",
+    "value": 45,
+    "step": 5,
+    "min": 0,
+    "max": 100,
+    "group": "Couleurs"
+  },
+  "windBob": {
+    "type": "number",
+    "label": "Vent — balancement vertical",
+    "value": 45,
+    "step": 5,
+    "min": 0,
+    "max": 100,
+    "group": "Couleurs"
+  },
+  "tlOrientation": {
+    "type": "dropdown",
+    "label": "Feuillage — orientation du coin haut-gauche",
+    "value": "rot180",
+    "options": {
+      "rot180": "Rotation 180° — descend vers le bas-gauche",
+      "mirrorv": "Miroir vertical — descend vers le bas-droite",
+      "mirrorh": "Miroir horizontal — monte vers le haut-gauche",
+      "none": "Aucune — identique au coin bas-droite"
+    },
+    "group": "Couleurs"
+  },
+  "windSpeed": {
+    "type": "number",
+    "label": "Vent — vitesse",
+    "value": 50,
+    "step": 5,
+    "min": 20,
+    "max": 100,
+    "group": "Couleurs"
+  },
+  "giftMode": {
+    "type": "dropdown",
+    "label": "Comptage des gift bombs — à valider avec un vrai gift bomb",
+    "value": "individual",
+    "options": {
+      "individual": "Events individuels (recommandé)",
+      "bulk": "Event récapitulatif"
+    },
+    "group": "Avancé"
+  }
+}

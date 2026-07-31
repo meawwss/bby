@@ -1,0 +1,618 @@
+{
+  "currentSubs": {
+    "type": "number",
+    "label": "Nombre de subs actuel (marque automatiquement les paliers atteints)",
+    "value": 0,
+    "group": "Progression"
+  },
+  "eyebrow": {
+    "type": "text",
+    "label": "Petite mention au-dessus du titre",
+    "value": "SUBATHON",
+    "group": "Titre"
+  },
+  "titleLine1": {
+    "type": "text",
+    "label": "Titre - ligne 1",
+    "value": "OBJECTIFS",
+    "group": "Titre"
+  },
+  "titleLine2": {
+    "type": "text",
+    "label": "Titre - ligne 2",
+    "value": "DU SUBATHON",
+    "group": "Titre"
+  },
+  "bgImage": {
+    "type": "image-input",
+    "label": "Image de fond (optionnelle)",
+    "value": "",
+    "group": "Fond"
+  },
+  "bgFit": {
+    "type": "dropdown",
+    "label": "Ajustement de l'image",
+    "value": "cover",
+    "options": {
+      "Remplir (cover)": "cover",
+      "Contenir (contain)": "contain"
+    },
+    "group": "Fond"
+  },
+  "bgZoom": {
+    "type": "slider",
+    "label": "Zoom de l'image",
+    "value": 100,
+    "min": 100,
+    "max": 220,
+    "step": 5,
+    "group": "Fond"
+  },
+  "bgPosX": {
+    "type": "slider",
+    "label": "Position horizontale de l'image",
+    "value": 50,
+    "min": 0,
+    "max": 100,
+    "step": 1,
+    "group": "Fond"
+  },
+  "bgPosY": {
+    "type": "slider",
+    "label": "Position verticale de l'image",
+    "value": 50,
+    "min": 0,
+    "max": 100,
+    "step": 1,
+    "group": "Fond"
+  },
+  "bgTintColor": {
+    "type": "colorpicker",
+    "label": "Teinte du fond",
+    "value": "#2f5a33",
+    "group": "Fond"
+  },
+  "bgTintOpacity": {
+    "type": "slider",
+    "label": "Intensité de la teinte (sur l'image, ou seule si pas d'image)",
+    "value": 60,
+    "min": 0,
+    "max": 100,
+    "step": 5,
+    "group": "Fond"
+  },
+  "accentLight": {
+    "type": "colorpicker",
+    "label": "Accent doré - clair",
+    "value": "#ffe9a8",
+    "group": "Couleurs"
+  },
+  "accentDark": {
+    "type": "colorpicker",
+    "label": "Accent doré - foncé",
+    "value": "#a3760f",
+    "group": "Couleurs"
+  },
+  "title1Top": {
+    "type": "colorpicker",
+    "label": "Titre ligne 1 - haut",
+    "value": "#ffffff",
+    "group": "Couleurs"
+  },
+  "title1Bottom": {
+    "type": "colorpicker",
+    "label": "Titre ligne 1 - bas",
+    "value": "#c3d4ad",
+    "group": "Couleurs"
+  },
+  "eyebrowColor": {
+    "type": "colorpicker",
+    "label": "Couleur mention + puces",
+    "value": "#e8c877",
+    "group": "Couleurs"
+  },
+  "frameColor": {
+    "type": "colorpicker",
+    "label": "Couleur du cadre",
+    "value": "rgba(240,200,90,0.4)",
+    "group": "Couleurs"
+  },
+  "pillBg": {
+    "type": "colorpicker",
+    "label": "Fond des pilules",
+    "value": "rgba(10,20,10,0.75)",
+    "group": "Couleurs"
+  },
+  "pillBorder": {
+    "type": "colorpicker",
+    "label": "Bordure des pilules",
+    "value": "rgba(230,190,90,0.35)",
+    "group": "Couleurs"
+  },
+  "textColor": {
+    "type": "colorpicker",
+    "label": "Couleur du texte des paliers",
+    "value": "#f2f1ea",
+    "group": "Couleurs"
+  },
+  "goal1Subs": {
+    "type": "number",
+    "label": "Palier 1 — nombre de subs",
+    "value": 5,
+    "group": "Palier 1"
+  },
+  "goal1Reward": {
+    "type": "text",
+    "label": "Palier 1 — récompense",
+    "value": "Killer roulette (DBD)",
+    "group": "Palier 1"
+  },
+  "goal2Subs": {
+    "type": "number",
+    "label": "Palier 2 — nombre de subs",
+    "value": 10,
+    "group": "Palier 2"
+  },
+  "goal2Reward": {
+    "type": "text",
+    "label": "Palier 2 — récompense",
+    "value": "Game viewers avec perks aléatoires",
+    "group": "Palier 2"
+  },
+  "goal3Subs": {
+    "type": "number",
+    "label": "Palier 3 — nombre de subs",
+    "value": 25,
+    "group": "Palier 3"
+  },
+  "goal3Reward": {
+    "type": "text",
+    "label": "Palier 3 — récompense",
+    "value": "Battle royale 3 facts 1 lie sur moi",
+    "group": "Palier 3"
+  },
+  "goal4Subs": {
+    "type": "number",
+    "label": "Palier 4 — nombre de subs",
+    "value": 50,
+    "group": "Palier 4"
+  },
+  "goal4Reward": {
+    "type": "text",
+    "label": "Palier 4 — récompense",
+    "value": "Jeu du crabe sur Roblox",
+    "group": "Palier 4"
+  },
+  "goal5Subs": {
+    "type": "number",
+    "label": "Palier 5 — nombre de subs",
+    "value": 75,
+    "group": "Palier 5"
+  },
+  "goal5Reward": {
+    "type": "text",
+    "label": "Palier 5 — récompense",
+    "value": "Petite radio horreur",
+    "group": "Palier 5"
+  },
+  "goal6Subs": {
+    "type": "number",
+    "label": "Palier 6 — nombre de subs",
+    "value": 100,
+    "group": "Palier 6"
+  },
+  "goal6Reward": {
+    "type": "text",
+    "label": "Palier 6 — récompense",
+    "value": "1v1 viewers (DBD, LoL ou échecs)",
+    "group": "Palier 6"
+  },
+  "goal7Subs": {
+    "type": "number",
+    "label": "Palier 7 — nombre de subs",
+    "value": 125,
+    "group": "Palier 7"
+  },
+  "goal7Reward": {
+    "type": "text",
+    "label": "Palier 7 — récompense",
+    "value": "Smash or pass (persos fictifs edition)",
+    "group": "Palier 7"
+  },
+  "goal8Subs": {
+    "type": "number",
+    "label": "Palier 8 — nombre de subs",
+    "value": 150,
+    "group": "Palier 8"
+  },
+  "goal8Reward": {
+    "type": "text",
+    "label": "Palier 8 — récompense",
+    "value": "Tournoi de musique avec cadeau!",
+    "group": "Palier 8"
+  },
+  "goal9Subs": {
+    "type": "number",
+    "label": "Palier 9 — nombre de subs",
+    "value": 175,
+    "group": "Palier 9"
+  },
+  "goal9Reward": {
+    "type": "text",
+    "label": "Palier 9 — récompense",
+    "value": "Pick random sur LoL (en classé)",
+    "group": "Palier 9"
+  },
+  "goal10Subs": {
+    "type": "number",
+    "label": "Palier 10 — nombre de subs",
+    "value": 200,
+    "group": "Palier 10"
+  },
+  "goal10Reward": {
+    "type": "text",
+    "label": "Palier 10 — récompense",
+    "value": "Aventure jeu solo au choix",
+    "group": "Palier 10"
+  },
+  "goal11Subs": {
+    "type": "number",
+    "label": "Palier 11 — nombre de subs",
+    "value": 225,
+    "group": "Palier 11"
+  },
+  "goal11Reward": {
+    "type": "text",
+    "label": "Palier 11 — récompense",
+    "value": "Lecture creepypastas",
+    "group": "Palier 11"
+  },
+  "goal12Subs": {
+    "type": "number",
+    "label": "Palier 12 — nombre de subs",
+    "value": 250,
+    "group": "Palier 12"
+  },
+  "goal12Reward": {
+    "type": "text",
+    "label": "Palier 12 — récompense",
+    "value": "ASMR + squishy jusqu'au prochain palier",
+    "group": "Palier 12"
+  },
+  "goal13Subs": {
+    "type": "number",
+    "label": "Palier 13 — nombre de subs",
+    "value": 300,
+    "group": "Palier 13"
+  },
+  "goal13Reward": {
+    "type": "text",
+    "label": "Palier 13 — récompense",
+    "value": "Je mange des buldak avec toute la sauce qui pique",
+    "group": "Palier 13"
+  },
+  "goal14Subs": {
+    "type": "number",
+    "label": "Palier 14 — nombre de subs",
+    "value": 325,
+    "group": "Palier 14"
+  },
+  "goal14Reward": {
+    "type": "text",
+    "label": "Palier 14 — récompense",
+    "value": "On lit mes demandes de DM",
+    "group": "Palier 14"
+  },
+  "goal15Subs": {
+    "type": "number",
+    "label": "Palier 15 — nombre de subs",
+    "value": 350,
+    "group": "Palier 15"
+  },
+  "goal15Reward": {
+    "type": "text",
+    "label": "Palier 15 — récompense",
+    "value": "Giveaway cartes cadeaux Steam ou Riot",
+    "group": "Palier 15"
+  },
+  "goal16Subs": {
+    "type": "number",
+    "label": "Palier 16 — nombre de subs",
+    "value": 400,
+    "group": "Palier 16"
+  },
+  "goal16Reward": {
+    "type": "text",
+    "label": "Palier 16 — récompense",
+    "value": "Je me transforme en trad goth",
+    "group": "Palier 16"
+  },
+  "goal17Subs": {
+    "type": "number",
+    "label": "Palier 17 — nombre de subs",
+    "value": 425,
+    "group": "Palier 17"
+  },
+  "goal17Reward": {
+    "type": "text",
+    "label": "Palier 17 — récompense",
+    "value": "Popsauce",
+    "group": "Palier 17"
+  },
+  "goal18Subs": {
+    "type": "number",
+    "label": "Palier 18 — nombre de subs",
+    "value": 450,
+    "group": "Palier 18"
+  },
+  "goal18Reward": {
+    "type": "text",
+    "label": "Palier 18 — récompense",
+    "value": "Jeu d'horreur dans le noir",
+    "group": "Palier 18"
+  },
+  "goal19Subs": {
+    "type": "number",
+    "label": "Palier 19 — nombre de subs",
+    "value": 500,
+    "group": "Palier 19"
+  },
+  "goal19Reward": {
+    "type": "text",
+    "label": "Palier 19 — récompense",
+    "value": "On fait un puzzle (repos)",
+    "group": "Palier 19"
+  },
+  "goal20Subs": {
+    "type": "number",
+    "label": "Palier 20 — nombre de subs",
+    "value": 600,
+    "group": "Palier 20"
+  },
+  "goal20Reward": {
+    "type": "text",
+    "label": "Palier 20 — récompense",
+    "value": "Serveur communautaire Minecraft",
+    "group": "Palier 20"
+  },
+  "goal21Subs": {
+    "type": "number",
+    "label": "Palier 21 — nombre de subs",
+    "value": 700,
+    "group": "Palier 21"
+  },
+  "goal21Reward": {
+    "type": "text",
+    "label": "Palier 21 — récompense",
+    "value": "Live IRL à la salle",
+    "group": "Palier 21"
+  },
+  "goal22Subs": {
+    "type": "number",
+    "label": "Palier 22 — nombre de subs",
+    "value": 800,
+    "group": "Palier 22"
+  },
+  "goal22Reward": {
+    "type": "text",
+    "label": "Palier 22 — récompense",
+    "value": "Je me teins les cheveux en rose",
+    "group": "Palier 22"
+  },
+  "goal23Subs": {
+    "type": "number",
+    "label": "Palier 23 — nombre de subs",
+    "value": 900,
+    "group": "Palier 23"
+  },
+  "goal23Reward": {
+    "type": "text",
+    "label": "Palier 23 — récompense",
+    "value": "Je crée un compte cosplay + cosplay au choix",
+    "group": "Palier 23"
+  },
+  "goal24Subs": {
+    "type": "number",
+    "label": "Palier 24 — nombre de subs",
+    "value": 1000,
+    "group": "Palier 24"
+  },
+  "goal24Reward": {
+    "type": "text",
+    "label": "Palier 24 — récompense",
+    "value": "Je rajoute 24 h + nouveaux goals",
+    "group": "Palier 24"
+  },
+  "goal25Subs": {
+    "type": "number",
+    "label": "Palier 25 — nombre de subs",
+    "value": 625,
+    "group": "Palier 25 (vide = masqué)"
+  },
+  "goal25Reward": {
+    "type": "text",
+    "label": "Palier 25 — récompense",
+    "value": "",
+    "group": "Palier 25 (vide = masqué)"
+  },
+  "goal26Subs": {
+    "type": "number",
+    "label": "Palier 26 — nombre de subs",
+    "value": 650,
+    "group": "Palier 26 (vide = masqué)"
+  },
+  "goal26Reward": {
+    "type": "text",
+    "label": "Palier 26 — récompense",
+    "value": "",
+    "group": "Palier 26 (vide = masqué)"
+  },
+  "goal27Subs": {
+    "type": "number",
+    "label": "Palier 27 — nombre de subs",
+    "value": 675,
+    "group": "Palier 27 (vide = masqué)"
+  },
+  "goal27Reward": {
+    "type": "text",
+    "label": "Palier 27 — récompense",
+    "value": "",
+    "group": "Palier 27 (vide = masqué)"
+  },
+  "goal28Subs": {
+    "type": "number",
+    "label": "Palier 28 — nombre de subs",
+    "value": 700,
+    "group": "Palier 28 (vide = masqué)"
+  },
+  "goal28Reward": {
+    "type": "text",
+    "label": "Palier 28 — récompense",
+    "value": "",
+    "group": "Palier 28 (vide = masqué)"
+  },
+  "goal29Subs": {
+    "type": "number",
+    "label": "Palier 29 — nombre de subs",
+    "value": 725,
+    "group": "Palier 29 (vide = masqué)"
+  },
+  "goal29Reward": {
+    "type": "text",
+    "label": "Palier 29 — récompense",
+    "value": "",
+    "group": "Palier 29 (vide = masqué)"
+  },
+  "goal30Subs": {
+    "type": "number",
+    "label": "Palier 30 — nombre de subs",
+    "value": 750,
+    "group": "Palier 30 (vide = masqué)"
+  },
+  "goal30Reward": {
+    "type": "text",
+    "label": "Palier 30 — récompense",
+    "value": "",
+    "group": "Palier 30 (vide = masqué)"
+  },
+  "goal31Subs": {
+    "type": "number",
+    "label": "Palier 31 — nombre de subs",
+    "value": 775,
+    "group": "Palier 31 (vide = masqué)"
+  },
+  "goal31Reward": {
+    "type": "text",
+    "label": "Palier 31 — récompense",
+    "value": "",
+    "group": "Palier 31 (vide = masqué)"
+  },
+  "goal32Subs": {
+    "type": "number",
+    "label": "Palier 32 — nombre de subs",
+    "value": 800,
+    "group": "Palier 32 (vide = masqué)"
+  },
+  "goal32Reward": {
+    "type": "text",
+    "label": "Palier 32 — récompense",
+    "value": "",
+    "group": "Palier 32 (vide = masqué)"
+  },
+  "goal33Subs": {
+    "type": "number",
+    "label": "Palier 33 — nombre de subs",
+    "value": 825,
+    "group": "Palier 33 (vide = masqué)"
+  },
+  "goal33Reward": {
+    "type": "text",
+    "label": "Palier 33 — récompense",
+    "value": "",
+    "group": "Palier 33 (vide = masqué)"
+  },
+  "goal34Subs": {
+    "type": "number",
+    "label": "Palier 34 — nombre de subs",
+    "value": 850,
+    "group": "Palier 34 (vide = masqué)"
+  },
+  "goal34Reward": {
+    "type": "text",
+    "label": "Palier 34 — récompense",
+    "value": "",
+    "group": "Palier 34 (vide = masqué)"
+  },
+  "goal35Subs": {
+    "type": "number",
+    "label": "Palier 35 — nombre de subs",
+    "value": 875,
+    "group": "Palier 35 (vide = masqué)"
+  },
+  "goal35Reward": {
+    "type": "text",
+    "label": "Palier 35 — récompense",
+    "value": "",
+    "group": "Palier 35 (vide = masqué)"
+  },
+  "goal36Subs": {
+    "type": "number",
+    "label": "Palier 36 — nombre de subs",
+    "value": 900,
+    "group": "Palier 36 (vide = masqué)"
+  },
+  "goal36Reward": {
+    "type": "text",
+    "label": "Palier 36 — récompense",
+    "value": "",
+    "group": "Palier 36 (vide = masqué)"
+  },
+  "goal37Subs": {
+    "type": "number",
+    "label": "Palier 37 — nombre de subs",
+    "value": 925,
+    "group": "Palier 37 (vide = masqué)"
+  },
+  "goal37Reward": {
+    "type": "text",
+    "label": "Palier 37 — récompense",
+    "value": "",
+    "group": "Palier 37 (vide = masqué)"
+  },
+  "goal38Subs": {
+    "type": "number",
+    "label": "Palier 38 — nombre de subs",
+    "value": 950,
+    "group": "Palier 38 (vide = masqué)"
+  },
+  "goal38Reward": {
+    "type": "text",
+    "label": "Palier 38 — récompense",
+    "value": "",
+    "group": "Palier 38 (vide = masqué)"
+  },
+  "goal39Subs": {
+    "type": "number",
+    "label": "Palier 39 — nombre de subs",
+    "value": 975,
+    "group": "Palier 39 (vide = masqué)"
+  },
+  "goal39Reward": {
+    "type": "text",
+    "label": "Palier 39 — récompense",
+    "value": "",
+    "group": "Palier 39 (vide = masqué)"
+  },
+  "goal40Subs": {
+    "type": "number",
+    "label": "Palier 40 — nombre de subs",
+    "value": 1000,
+    "group": "Palier 40 (vide = masqué)"
+  },
+  "goal40Reward": {
+    "type": "text",
+    "label": "Palier 40 — récompense",
+    "value": "",
+    "group": "Palier 40 (vide = masqué)"
+  }
+}

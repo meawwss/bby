@@ -1,0 +1,202 @@
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600&family=Archivo+Black&family=Chakra+Petch:wght@400;500;600&family=Orbitron:wght@600;700&display=swap');
+
+#subathon-poster {
+  --bg-tint: #2f5a33;
+  --accent-light: #ffe9a8;
+  --accent-dark: #a3760f;
+  --frame-color: rgba(240,200,90,0.4);
+  --eyebrow-color: #e8c877;
+  --title1-top: #ffffff;
+  --title1-bottom: #c3d4ad;
+  --pill-bg: rgba(10,20,10,0.75);
+  --pill-border: rgba(230,190,90,0.35);
+  --text-color: #f2f1ea;
+  --tint-opacity: 1;
+
+  position: relative;
+  width: 1080px;
+  height: auto;
+  min-height: 1000px;
+  overflow: visible;
+  font-family: 'Chakra Petch', sans-serif;
+  color: var(--text-color);
+  background: color-mix(in srgb, var(--bg-tint) 55%, black);
+}
+
+#subathon-poster .bg-image-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+}
+#subathon-poster .bg-image-layer > i {
+  position: absolute;
+  inset: 0;
+  display: block;
+  background-repeat: no-repeat;
+  background-size: cover;
+  background-position: 50% 50%;
+  transform: scale(1);
+  transform-origin: center;
+}
+
+#subathon-poster .bg-tint {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  opacity: var(--tint-opacity);
+  background:
+    radial-gradient(ellipse 900px 560px at 50% -8%, color-mix(in srgb, var(--bg-tint) 65%, white 10%), transparent 62%),
+    linear-gradient(165deg, color-mix(in srgb, var(--bg-tint) 85%, white 8%) 0%, var(--bg-tint) 45%, color-mix(in srgb, var(--bg-tint) 55%, black) 100%);
+}
+
+#subathon-poster .frame { position: absolute; z-index: 1; pointer-events: none; border: 1px solid var(--frame-color); }
+#subathon-poster .frame-outer { inset: 22px; }
+#subathon-poster .frame-inner { inset: 30px; opacity: 0.55; }
+
+#subathon-poster .content {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  height: 100%;
+  padding: 52px 58px 46px;
+  box-sizing: border-box;
+}
+
+#subathon-poster .eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  letter-spacing: 0.36em;
+  font-family: 'Cinzel', serif;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--eyebrow-color);
+}
+#subathon-poster .eyebrow span { font-size: 15px; }
+
+#subathon-poster .title { text-align: center; margin-top: 14px; }
+#subathon-poster .title-line1 {
+  font-family: 'Archivo Black', sans-serif;
+  font-size: 46px;
+  line-height: 1;
+  background: linear-gradient(180deg, var(--title1-top) 0%, var(--title1-bottom) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 3px 0 rgba(0,0,0,0.35)) drop-shadow(0 8px 18px rgba(0,0,0,0.45));
+}
+#subathon-poster .title-line2 {
+  font-family: 'Archivo Black', sans-serif;
+  font-size: 70px;
+  line-height: 1.02;
+  margin-top: 2px;
+  background: linear-gradient(180deg, var(--accent-light) 0%, color-mix(in srgb, var(--accent-light) 50%, var(--accent-dark)) 45%, var(--accent-dark) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 4px 0 rgba(0,0,0,0.4)) drop-shadow(0 10px 26px color-mix(in srgb, var(--accent-light) 55%, transparent));
+}
+
+#subathon-poster .divider { display: flex; align-items: center; gap: 14px; margin-top: 22px; }
+#subathon-poster .divider span { width: 60px; height: 1px; background: linear-gradient(90deg, transparent, var(--accent-light)); }
+#subathon-poster .divider span:last-child { background: linear-gradient(90deg, var(--accent-light), transparent); }
+#subathon-poster .divider i { width: 6px; height: 6px; transform: rotate(45deg); background: var(--eyebrow-color); display: block; }
+
+#subathon-poster .goals-grid {
+  margin-top: 30px;
+  width: 100%;
+  max-width: 980px;
+  display: grid;
+  grid-template-columns: minmax(0,1fr) minmax(0,1fr);
+  column-gap: 26px;
+  row-gap: 12px;
+}
+
+#subathon-poster .goal-pill {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+  background: var(--pill-bg);
+  border: 1px solid var(--pill-border);
+  border-radius: 10px;
+  padding: 8px 18px;
+}
+#subathon-poster .goal-subs {
+  flex-shrink: 0;
+  font-family: 'Archivo Black', sans-serif;
+  font-size: 19px;
+  color: color-mix(in srgb, var(--accent-light) 70%, var(--accent-dark) 30%);
+  min-width: 46px;
+}
+#subathon-poster .goal-reward {
+  min-width: 0;
+  flex: 0 1 auto;
+  font-family: 'Chakra Petch', sans-serif;
+  font-weight: 500;
+  font-size: 14.5px;
+  letter-spacing: 0.01em;
+  color: var(--text-color);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#subathon-poster .goal-pill {
+  position: relative;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+#subathon-poster .goal-pill.is-done {
+  background: linear-gradient(120deg, color-mix(in srgb, var(--accent-dark) 20%, #10130d) 0%, #10130d 55%);
+  border-color: color-mix(in srgb, var(--accent-light) 55%, transparent);
+}
+#subathon-poster .goal-pill.is-done .goal-reward {
+  color: color-mix(in srgb, var(--text-color) 65%, transparent);
+  font-weight: 400;
+}
+#subathon-poster .goal-content {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  display: flex;
+  align-items: center;
+  position: relative;
+}
+#subathon-poster .goal-content .goal-subs {
+  padding-right: 14px;
+  min-width: 46px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+#subathon-poster .goal-strike {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  height: 1.5px;
+  width: 0;
+  background: color-mix(in srgb, var(--accent-light) 55%, transparent);
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+#subathon-poster .goal-check {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, var(--accent-light), var(--accent-dark));
+  color: #1a1204;
+  font-size: 12px;
+  font-weight: 700;
+  font-family: 'Chakra Petch', sans-serif;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-light) 18%, transparent);
+}
+#subathon-poster .goal-pill.is-done .goal-check {
+  visibility: hidden;
+}

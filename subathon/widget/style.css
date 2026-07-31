@@ -1,0 +1,449 @@
+/* ============================================================
+   SUBATHON WIDGET — StreamElements
+   Colle ce bloc dans l'onglet CSS
+   ============================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap');
+
+.sb-root *, .sb-root *::before, .sb-root *::after { box-sizing: border-box; }
+
+.sb-root {
+  /* ---- palette ---- */
+  --cream:      #FFFBF3;   /* fond des cartes */
+  --olive:      #767E4B;   /* boîte du timer + typo */
+  --leaf-1:     #ABC776;   /* vert principal (icône, feuilles, halo) */
+  --leaf-2:     #9BBB63;   /* vert d'ombre */
+  --leaf-3:     #C2D897;   /* vert clair */
+  --stem:       #93AE5C;
+  --on-olive:   #FFFFFF;   /* chiffres du timer */
+
+  --alert-bg:      255, 251, 243;  /* rgb du fond de l'alerte */
+  --alert-bg-a:    .26;            /* opacité du fond de l'alerte */
+  --alert-ink:     #515731;   /* coeur ET texte de l-alerte : meme encre */
+  --alert-text-a:  .95;
+
+  --glow:       #B4CC80;   /* liseré vert clair autour de la carte */
+  --glow-rgb:   180, 204, 128;
+  --glow-a:     1;         /* opacité du liseré */
+  --glow-size:  7px;       /* épaisseur du liseré */
+  --scale:      1;         /* échelle globale */
+  --font:       'Fredoka', 'Baloo 2', 'Nunito', 'Poppins', system-ui, sans-serif;
+
+  /* ---- durées ---- */
+  --t-strike:   .55s;
+  --t-row:      .45s;
+  --t-alert-in: .52s;
+  --t-alert-out:.38s;
+
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  box-sizing: border-box;
+  justify-content: center;
+  align-items: flex-start;
+  font-family: var(--font);
+  -webkit-font-smoothing: antialiased;
+  overflow: visible;
+}
+
+.sb-stage {
+  width: 400px;                 /* largeur de référence : tout est calé dessus */
+  transform: scale(var(--scale));
+  transform-origin: top center;
+}
+
+/* ============================================================
+   ALERTE
+   ============================================================ */
+.sb-alert {
+  height: 62px;
+  margin-bottom: 28px;
+  display: flex;
+  align-items: center;
+  gap: 19px;
+  width: max-content;
+  max-width: 400px;
+  margin-left: auto;
+  margin-right: auto;
+  padding: 6px 34px 6px 6px;
+  border-radius: 999px;
+  background: rgba(var(--alert-bg), var(--alert-bg-a));
+  box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, .18);
+  opacity: 0;
+  transform: translateY(-16px) scale(.94);
+  transition:
+    opacity var(--t-alert-out) ease-in,
+    transform var(--t-alert-out) ease-in;
+  will-change: opacity, transform;
+  pointer-events: none;
+}
+.sb-alert.is-on {
+  opacity: 1;
+  transform: none;
+  transition:
+    opacity var(--t-alert-in) cubic-bezier(.22, 1.15, .36, 1),
+    transform var(--t-alert-in) cubic-bezier(.22, 1.15, .36, 1);
+}
+/* Fond retiré : ni pilule ni liseré, l'icône et le texte flottent seuls.
+   Sur une scène sombre, pensez à éclaircir la couleur du texte. */
+.sb-alert--nobg { background: none; box-shadow: none; padding-right: 6px; }
+
+/* réserve la place de l'alerte pour que rien ne saute quand elle disparaît */
+.sb-alert--reserve { visibility: hidden; }
+.sb-alert.is-on    { visibility: visible; }
+
+.sb-alert__icon {
+  flex: 0 0 auto;
+  width: 50px;
+  height: 50px;
+  display: block;
+}
+.sb-alert__icon svg { width: 100%; height: 100%; display: block; }
+.sb-bubble { fill: var(--leaf-1); }
+.sb-heart  { fill: var(--alert-ink); }
+
+.sb-alert__text {
+  font-size: 23px;
+  font-weight: 500;
+  letter-spacing: .1px;
+  /* 1,35 et non 1 : avec un recadrage horizontal, une hauteur de ligne serrée
+     rogne les jambages — le « j » de « objectif », par exemple. */
+  line-height: 1.35;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--alert-ink);
+  opacity: var(--alert-text-a);
+  /* Pas d-ombre portee : elle servait a detacher un texte blanc d-un fond
+     clair. Avec une encre sombre elle ne ferait qu-empater les lettres. */
+}
+
+/* ============================================================
+   CARTE + TIMER
+   ============================================================ */
+.sb-cardwrap {
+  position: relative;
+  width: 400px;
+}
+
+.sb-card {
+  position: relative;
+  z-index: 2;
+  height: 165px;
+  border-radius: 26px;
+  background: var(--cream);
+  box-shadow:
+    0 0 0 var(--glow-size) rgba(var(--glow-rgb), var(--glow-a)),
+    0 0 24px 5px rgba(var(--glow-rgb), calc(var(--glow-a) * .38)),
+    0 6px 18px rgba(50, 55, 30, .18);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.sb-timerbox {
+  position: relative;           /* ancre la mini-alerte */
+  width: 336px;                 /* 400 - 2 x 32 */
+  height: 109px;
+  margin-top: 29px;
+  border-radius: 21px;
+  background: var(--olive);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ---- mini-alerte : « 5 subs  + 25 min » ----
+   Épinglée sur le coin haut-droit du timer, toujours au même endroit.
+   Crème sur liseré vert pour se détacher de l'olive. */
+.sb-mini {
+  position: absolute;
+  top: -14px;
+  right: -10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+  border-radius: 999px;
+  padding: 5px 13px;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.35;
+  background: var(--cream);
+  color: var(--alert-ink);
+  box-shadow: 0 0 0 3px var(--glow), 0 4px 10px rgba(40, 45, 25, .25);
+  opacity: 0;
+  transform: scale(.7) translateY(4px);
+  transition: opacity .28s ease, transform .34s cubic-bezier(.22, 1.2, .3, 1);
+  pointer-events: none;
+}
+.sb-mini.is-on { opacity: 1; transform: scale(1) translateY(0); }
+.sb-mini b { font-weight: 600; opacity: .68; font-size: 13.5px; }
+.sb-mini i { font-style: normal; font-weight: 700; color: var(--olive); }
+
+.sb-timer {
+  font-size: 58px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--on-olive);
+  letter-spacing: .5px;
+  display: flex;
+  align-items: baseline;
+  transform: translateY(1px);
+}
+/* largeurs fixes : le timer ne « tremble » pas en changeant de chiffre */
+.sb-d { display: inline-block; width: .60em; text-align: center; }
+.sb-c { display: inline-block; width: .30em; text-align: center; }
+
+.sb-timer.is-paused { animation: sb-pulse 1.6s ease-in-out infinite; }
+@keyframes sb-pulse { 0%, 100% { opacity: 1 } 50% { opacity: .45 } }
+
+.sb-counter {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  font-size: 19px;
+  font-weight: 500;
+  color: var(--olive);
+  opacity: .92;
+  line-height: 1;
+}
+
+/* ---------- feuillage ---------- */
+.sb-foliage {
+  position: absolute;
+  z-index: 3;                 /* le feuillage passe DEVANT la carte, comme sur la maquette */
+  width: var(--foliage-size, 76px);
+  height: var(--foliage-size, 76px);
+  overflow: visible;
+  pointer-events: none;
+  /* Pas de filter ici : un filtre CSS force une rasterisation, et combine a une
+     animation il rend le feuillage flou dans le navigateur d-OBS. */
+  shape-rendering: geometricPrecision;
+}
+/* La boite est CENTREE sur le coin : dans le viewBox 120x120, le coin de la
+   carte est en (60,60), donc au centre de la boite. */
+.sb-foliage--tl { left:  calc(var(--foliage-size, 76px) / -2);
+                  top:   calc(var(--foliage-size, 76px) / -2 + var(--tl-dy, 0px)); }
+.sb-foliage--br { right: calc(var(--foliage-size, 76px) / -2);
+                  bottom:calc(var(--foliage-size, 76px) / -2); }
+.sb-stem {
+  fill: none;
+  stroke: var(--glow);
+  stroke-width: 2.2;
+  stroke-linecap: round;
+}
+.sb-leaf { fill: var(--glow); }
+
+/* ---- effet de vent ----
+   La fronde est ANCREE a sa racine : le groupe ne fait que tourner autour du
+   point ou la tige rejoint le lisere, jamais se translater. Le contour reste
+   donc parfaitement immobile et c-est la pointe qui balaie le plus.
+   Chaque foliole porte --p, sa position sur la tige (0,06 a la racine, 1 au
+   bout) : amplitude et dephasage en decoulent.
+   La rafale n-est pas une sinusoide : coup rapide dans une direction, puis
+   retour lent — c-est ce profil qui fait lire << vent >> plutot que << moteur >>. */
+.sb-leaf {
+  /* fill-box, PAS view-box : avec view-box, `transform-origin: 0 0` designe le
+     coin du viewBox SVG, donc chaque foliole pivotait autour du coin de la boite
+     au lieu de son propre point d-attache — d-ou la fronde qui se disloquait.
+     fill-box + left center place l-origine sur la base de la foliole. */
+  transform-box: fill-box;
+  transform-origin: left center;
+  animation: sb-leafsway calc(var(--wind-dur, 3.7s) * .62) ease-in-out infinite;
+  animation-delay: calc(var(--p, .5) * -0.52s);
+}
+.sb-sprig {
+  transform-origin: 60px 66px;
+  transform-box: view-box;
+  animation: sb-frondsway calc(var(--wind-dur, 3.7s) * 1.9) linear infinite;
+}
+@keyframes sb-leafsway {
+  0%, 100% { transform: translateY(calc(var(--wind-bob, 1.5px) * var(--p, .5) * -0.45))
+                        rotate(calc(var(--wind-amp, 1.2deg) * var(--p, .5) * -0.9)); }
+  50%      { transform: translateY(calc(var(--wind-bob, 1.5px) * var(--p, .5) * 0.45))
+                        rotate(calc(var(--wind-amp, 1.2deg) * var(--p, .5) * 0.9)); }
+}
+/* coup de vent en 14 % du cycle, puis retour progressif */
+@keyframes sb-frondsway {
+  0%   { transform: rotate(0deg); }
+  14%  { transform: rotate(var(--wind-amp, 1.2deg)); }
+  38%  { transform: rotate(calc(var(--wind-amp, 1.2deg) * .58)); }
+  62%  { transform: rotate(calc(var(--wind-amp, 1.2deg) * .28)); }
+  82%  { transform: rotate(calc(var(--wind-amp, 1.2deg) * .09)); }
+  100% { transform: rotate(0deg); }
+}
+
+/* ---- petites boules flottantes ---- */
+.sb-mote {
+  fill: var(--glow);
+  transform-box: view-box;
+  opacity: .9;
+}
+.sb-mote--a { animation: sb-float calc(var(--wind-dur, 3.7s) * 1.6) ease-in-out infinite; }
+.sb-mote--b { animation: sb-float calc(var(--wind-dur, 3.7s) * 2.1) ease-in-out infinite;
+              animation-delay: -1.3s; opacity: .82; }
+@keyframes sb-float {
+  0%, 100% { transform: translateY(calc(var(--wind-bob, 1.5px) * 1.1)); }
+  50%      { transform: translateY(calc(var(--wind-bob, 1.5px) * -1.1)); }
+}
+
+/* ============================================================
+   GOALS
+   ============================================================ */
+.sb-goals {
+  margin-top: 29px;
+  display: flex;
+  flex-direction: column;
+}
+
+.sb-goal {
+  position: relative;
+  height: 46px;
+  margin-bottom: 13px;
+  border-radius: 999px;
+  background: var(--cream);
+  box-shadow: 0 3px 8px rgba(50, 55, 30, .16);
+  display: flex;
+  align-items: center;
+  color: var(--olive);
+  font-size: var(--goal-font, 21px);
+  font-weight: 500;
+  overflow: hidden;
+  transition:
+    height var(--t-row) cubic-bezier(.4, 0, .2, 1),
+    margin var(--t-row) cubic-bezier(.4, 0, .2, 1),
+    opacity var(--t-row) ease,
+    transform var(--t-row) cubic-bezier(.22, 1.1, .36, 1);
+}
+.sb-goal:last-child { margin-bottom: 0; }
+
+/* le label se dimensionne sur son texte : le barré ne déborde donc jamais dessus */
+.sb-goal__label {
+  position: relative;
+  margin-left: 28px;
+  margin-right: 16px;
+  flex: 0 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  line-height: 1.45;
+}
+.sb-goal__text {
+  display: inline-block;
+  white-space: nowrap;
+  line-height: 1.45;          /* laisse passer les jambages du j, g, p, q, y */
+}
+/* mode « tronquer » : les points de suspension vivent sur le conteneur */
+.sb-goal--clip .sb-goal__label { text-overflow: ellipsis; }
+.sb-goal--clip .sb-goal__text  { display: inline; }
+
+/* mode « défilement » : pause, glissade, pause, retour. Jamais en continu :
+   un texte qui coule sans arrêt attire l-oeil en permanence, or le point
+   d-attention du bloc doit rester le timer. */
+.sb-goal--scroll .sb-goal__text {
+  animation: sb-marquee var(--sc-dur, 12s) ease-in-out infinite;
+}
+@keyframes sb-marquee {
+  0%, 14%   { transform: translateX(0); }
+  46%, 62%  { transform: translateX(calc(var(--sc-dist, 0px) * -1)); }
+  94%, 100% { transform: translateX(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sb-goal--scroll .sb-goal__text { animation: none; }
+}
+.sb-goal__value {
+  position: relative;
+  margin-left: auto;
+  margin-right: 52px;
+  font-weight: 600;
+  flex: 0 0 auto;
+  line-height: 1.45;
+}
+
+/* Barré : UNE SEULE ligne continue qui traverse toute la ligne, libellé et
+   valeur compris. Elle est portée par la ligne elle-même, pas par chacun des
+   deux textes, et se trace de gauche à droite. Les retraits reprennent ceux du
+   libellé et de la valeur pour que le trait s-arrête pile où ils s-arrêtent. */
+.sb-goal::after {
+  content: '';
+  position: absolute;
+  left: 28px;
+  right: 52px;
+  top: 52%;
+  height: 3px;
+  border-radius: 2px;
+  background: currentColor;
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform var(--t-strike) cubic-bezier(.65, 0, .35, 1);
+  pointer-events: none;
+}
+
+.sb-goal.is-done::after { transform: scaleX(1); }
+.sb-goal.is-done { color: var(--olive); }
+
+/* pop au moment où l'objectif tombe */
+.sb-goal.is-hit { animation: sb-hit .5s cubic-bezier(.22, 1.2, .36, 1); }
+@keyframes sb-hit {
+  0%   { transform: scale(1); }
+  35%  { transform: scale(1.035); }
+  100% { transform: scale(1); }
+}
+
+/* entrée / sortie de la fenêtre de goals */
+.sb-goal.is-entering { opacity: 0; transform: translateX(26px); height: 0; margin-bottom: 0; }
+.sb-goal.is-leaving  { opacity: 0; transform: translateX(-26px); height: 0; margin-bottom: 0; }
+
+/* ============================================================
+   PANNEAU DE TEST (visible seulement si le champ "Mode test" est ON)
+   ============================================================ */
+.sb-debug {
+  position: fixed;
+  left: 10px;
+  bottom: 10px;
+  z-index: 9999;
+  width: 250px;
+  padding: 10px;
+  border-radius: 12px;
+  background: rgba(22, 24, 18, .92);
+  color: #E8EEDC;
+  font: 500 11px/1.35 system-ui, sans-serif;
+  box-shadow: 0 8px 26px rgba(0, 0, 0, .45);
+}
+.sb-debug h4 { margin: 0 0 7px; font-size: 11px; letter-spacing: .6px; text-transform: uppercase; opacity: .65; }
+.sb-debug .sb-row { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
+.sb-debug button {
+  flex: 1 1 auto;
+  min-width: 44px;
+  padding: 5px 6px;
+  border: 0;
+  border-radius: 7px;
+  background: #4E5836;
+  color: #F0F5E4;
+  font: inherit;
+  cursor: pointer;
+}
+.sb-debug button:hover { background: #66744A; }
+.sb-debug button.sb-warn { background: #6E3B34; }
+.sb-debug .sb-out { margin-top: 4px; opacity: .6; font-size: 10px; }
+.sb-dbg-log {
+  margin: 3px 0 0;
+  max-height: 132px;
+  overflow-y: auto;
+  white-space: pre;
+  font: 9.5px/1.45 ui-monospace, Menlo, Consolas, monospace;
+  color: #b9cd97;
+  background: #0f120c;
+  border-radius: 6px;
+  padding: 5px 6px;
+}
+
+/* ============================================================
+   ACCESSIBILITÉ
+   ============================================================ */
+@media (prefers-reduced-motion: reduce) {
+  .sb-root * { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}
