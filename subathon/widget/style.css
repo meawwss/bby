@@ -1,7 +1,6 @@
 /* ============================================================
    SUBATHON WIDGET — StreamElements
    Colle ce bloc dans l'onglet CSS
-   Palette et géométrie relevées au pixel sur la maquette de référence.
    ============================================================ */
 
 @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap');
@@ -9,7 +8,7 @@
 .sb-root *, .sb-root *::before, .sb-root *::after { box-sizing: border-box; }
 
 .sb-root {
-  /* ---- palette (relevée sur la maquette) ---- */
+  /* ---- palette ---- */
   --cream:      #FFFBF3;   /* fond des cartes */
   --olive:      #767E4B;   /* boîte du timer + typo */
   --leaf-1:     #ABC776;   /* vert principal (icône, feuilles, halo) */
