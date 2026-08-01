@@ -1,6 +1,7 @@
 /* ============================================================
    SUBATHON WIDGET — StreamElements
    Colle ce bloc dans l'onglet CSS
+   Palette et géométrie relevées au pixel sur la maquette de référence.
    ============================================================ */
 
 @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap');
@@ -8,7 +9,7 @@
 .sb-root *, .sb-root *::before, .sb-root *::after { box-sizing: border-box; }
 
 .sb-root {
-  /* ---- palette ---- */
+  /* ---- palette (relevée sur la maquette) ---- */
   --cream:      #FFFBF3;   /* fond des cartes */
   --olive:      #767E4B;   /* boîte du timer + typo */
   --leaf-1:     #ABC776;   /* vert principal (icône, feuilles, halo) */
@@ -440,6 +441,32 @@
   border-radius: 6px;
   padding: 5px 6px;
 }
+
+/* ============================================================
+   BANDEAU D'ÉTAT DES ACTIONS
+   StreamElements ne permet pas à un widget de remettre ses propres Fields à
+   zéro : le sélecteur reste donc affiché sur la dernière action choisie. Ce
+   bandeau dit si elle est encore active ou déjà consommée. Il n'apparaît que
+   dans l'éditeur et en mode test, jamais à l'antenne.
+   ============================================================ */
+.sb-banner {
+  position: fixed;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9998;
+  max-width: 420px;
+  padding: 9px 15px;
+  border-radius: 11px;
+  font: 500 12.5px/1.4 system-ui, sans-serif;
+  color: #F2F6E8;
+  background: rgba(30, 34, 24, .93);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, .4);
+  pointer-events: none;
+}
+.sb-banner small { display: block; margin-top: 3px; opacity: .72; font-size: 11px; }
+.sb-banner--fresh { box-shadow: 0 0 0 2px #7EC46B, 0 6px 20px rgba(0, 0, 0, .4); }
+.sb-banner--done  { box-shadow: 0 0 0 2px #B4CC80, 0 6px 20px rgba(0, 0, 0, .4); opacity: .9; }
 
 /* ============================================================
    ACCESSIBILITÉ

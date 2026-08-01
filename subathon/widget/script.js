@@ -20,7 +20,9 @@
     fontFamily: 'Fredoka',
 
     storeKey: 'subathon_v1',
-    startHours: 2,
+    action: 'none',
+    setTimeTo: '',
+    startHours: 3,
     startMinutes: 30,
     maxHours: 0,                 // 0 = pas de plafond
     offlineBehaviour: 'pause',   // 'pause' | 'run'
@@ -30,11 +32,14 @@
     giftTimeFactor: 1,
     secPer100Bits: 60,
     secPerTipUnit: 30,
+    secPerFollow: 10,
+    followsMaxPerHour: 0,   // 0 = pas de plafond
 
-    ptsSubT1: 1, ptsSubT2: 2, ptsSubT3: 5, ptsSubPrime: 1,
+    ptsSubT1: 1, ptsSubT2: 1, ptsSubT3: 1, ptsSubPrime: 1,
     giftPointsFactor: 1,
     ptsPer100Bits: 0,
     ptsPerTipUnit: 0,
+    ptsPerFollow: 0,
 
     goalsList: '10 gift subs|50; terror movie night|100; karaoke night|150; cooking stream|200',
     goalsVisible: 4,
@@ -230,12 +235,36 @@
     else S.endsAt = Date.now() + Math.max(0, sec * 1000);
     capTime(); save(); paintTimer();
   }
+  /* Remise a zero complete. Centralisee : les trois chemins — action des
+     Fields, commande !subathon reset, bouton du panneau de test — passent
+     par ici. Sans cela, chacun oubliait un detail : l-animation de pause
+     restait sur le chrono alors que le decompte avait repris. */
+  function toutReinitialiser() {
+    nouvelleEpoque();
+    S.points = 0;
+    S.windowStart = 0;
+    S.paused = false;
+    S.pauseRemain = 0;
+    followsVus = [];
+    followsRecents = [];
+    setTime(F.startHours * 3600 + F.startMinutes * 60);
+    rafraichirPause();
+    syncGoals(false);
+    save();
+  }
+
+  /* L-etat visuel de pause doit toujours suivre S.paused, quel que soit le
+     chemin qui l-a modifie. */
+  function rafraichirPause() {
+    if (el.timer) el.timer.classList.toggle('is-paused', S.paused);
+  }
+
   function setPaused(p) {
     if (p === S.paused) return;
     nouvelleEpoque();
     if (p) { S.pauseRemain = remaining(); S.paused = true; }
     else { S.paused = false; S.endsAt = Date.now() + S.pauseRemain; }
-    el.timer.classList.toggle('is-paused', S.paused);
+    rafraichirPause();
     save(); paintTimer();
   }
 
@@ -247,6 +276,9 @@
     return pad2(h) + ':' + pad2(m) + ':' + pad2(s);
   }
   function paintTimer() {
+    // le DOM peut ne pas etre pret : un event recu pendant l-initialisation
+    // levait une exception qui interrompait tout le traitement
+    if (!el.timer) return;
     var str = fmt(remaining());
     if (str === lastTimerStr) return;
     lastTimerStr = str;
@@ -303,11 +335,16 @@
     }
     return clamp(start, 0, max);
   }
-  function scheduleRotate() {
+  /* `force` : redessiner meme si la fenetre n-a pas a bouger. Indispensable
+     apres une synchronisation, ou windowStart a DEJA ete recopie depuis
+     l-autre instance : sans cela la comparaison est vraie, rien n-est
+     redessine, et l-affichage reste bloque sur l-ancienne fournee. */
+  function scheduleRotate(force) {
     clearTimeout(rotateTimer);
     rotateTimer = setTimeout(function () {
       var t = targetWindowStart();
       if (t !== S.windowStart) { S.windowStart = t; save(); syncGoals(false); }
+      else if (force) syncGoals(false);
     }, Math.max(0, F.rotateDelay) * 1000);
   }
 
@@ -331,17 +368,37 @@
   /* Ajustement des libelles trop longs pour la ligne. Trois strategies, au
      choix du client : reduire la police jusqu-a ce que ca rentre, faire
      defiler doucement, ou tronquer. */
-  function fitLabel(node) {
+  /* Ajustement des libelles trop longs. Deux precautions apprises a l-usage :
+
+     1. On NE reinitialise PAS la taille avant d-avoir verifie qu-on peut
+        mesurer. Sinon, quand la largeur vaut 0 — page masquee, rendu en
+        cours, police Google pas encore chargee — la ligne repart a la taille
+        pleine et deborde, sans que rien ne la repare.
+     2. Une mesure impossible est REESSAYEE un peu plus tard, au lieu d-etre
+        abandonnee. C-est ce qui rend le resultat identique sur toutes les
+        instances, quel que soit leur etat au moment du rendu. */
+  function fitLabel(node, essai) {
     var lab = node.querySelector('.sb-goal__label');
     var txt = node.querySelector('.sb-goal__text');
     if (!lab || !txt) return;
+
+    var avail = lab.clientWidth;
+    if (!avail) {                       // mesure impossible pour l-instant
+      if ((essai || 0) < 12) {
+        setTimeout(function () {
+          if (node.parentNode) fitLabel(node, (essai || 0) + 1);
+        }, 120);
+      }
+      return;
+    }
+
     node.classList.remove('sb-goal--scroll', 'sb-goal--clip');
     txt.style.fontSize = '';
     txt.style.removeProperty('--sc-dist');
 
-    var avail = lab.clientWidth;
     var need = txt.scrollWidth;
-    if (!avail || !need || need <= avail + 1) return;   // rentre deja, ou pas encore rendu
+    if (!need) return;
+    if (need <= avail + 1) return;      // rentre tel quel
 
     if (F.longLabels === 'scroll') {
       var dist = need - avail;
@@ -359,6 +416,7 @@
   }
 
   function syncGoals(initial) {
+    if (!el.goals) return;
     if (initial) { el.goals.innerHTML = ''; rows = {}; }
     var n = Math.max(1, F.goalsVisible);
     var start = clamp(S.windowStart, 0, Math.max(0, goals.length - 1));
@@ -455,12 +513,14 @@
         horodatages, l-etat reste juste quoi qu-il arrive : au pire l-alerte
         disparait des le premier tick qui suit. */
   function pushAlert(text) {
+    if (!el.alert) return;
     alertQueue.push(text);
     if (alertQueue.length > 5) alertQueue.shift();   // pas d-embouteillage
     tickAlert();
   }
 
   function tickAlert() {
+    if (!el.alert) return;
     var maintenant = Date.now();
 
     if (alertPhase === 'shown' && maintenant >= alertJusqua) {
@@ -497,6 +557,7 @@
      dix events separes, on veut « 10 subs + 50 min » et non dix pilules.
      --------------------------------------------------------- */
   var miniCumul = null, miniJusqua = 0, miniFenetre = 0, dernierMiniId = '';
+  var followsVus = [], followsRecents = [];
 
   function dureeCourte(sec) {
     sec = Math.round(sec);
@@ -528,6 +589,7 @@
     }
     if (a.bits) bouts.push(a.bits.toLocaleString('fr-FR') + ' bits');
     if (a.tips) bouts.push('don');
+    if (a.follows) bouts.push(a.follows + ' follow' + (a.follows > 1 ? 's' : ''));
     return bouts.join(' · ');
   }
 
@@ -535,7 +597,7 @@
     if (secondes <= 0) return;
     var maintenant = Date.now();
     if (!miniCumul || maintenant > miniFenetre) {
-      miniCumul = { subs: 0, bits: 0, tips: 0, sec: 0, tier: null, offert: null };
+      miniCumul = { subs: 0, bits: 0, tips: 0, follows: 0, sec: 0, tier: null, offert: null };
     }
     miniCumul[genre] += nombre;
     miniCumul.sec += secondes;
@@ -557,6 +619,7 @@
        l-une n-affiche pas en double ce que l-autre a deja montre. */
     dernierMiniId = String(id || ('loc' + maintenant));
     S.miniLast = { subs: miniCumul.subs, bits: miniCumul.bits, tips: miniCumul.tips,
+                   follows: miniCumul.follows,
                    sec: miniCumul.sec, tier: miniCumul.tier,
                    offert: miniCumul.offert, id: dernierMiniId };
 
@@ -566,6 +629,7 @@
   function miniDepuis(ml) {          // detail recu d-une autre instance
     if (F.miniAlerts === 'off' || !el.mini) return;
     miniCumul = { subs: num(ml.subs, 0), bits: num(ml.bits, 0), tips: num(ml.tips, 0),
+                  follows: num(ml.follows, 0),
                   sec: num(ml.sec, 0), tier: ml.tier || null,
                   offert: ml.offert === true ? true : null };
     miniFenetre = 0;
@@ -582,6 +646,7 @@
   }
 
   function peindreMini() {
+    if (!el.mini || !miniCumul) return;
     var texte = libelleMini(miniCumul);
     el.mini.innerHTML = (texte ? '<b>' + texte + '</b>' : '') +
                         '<i>+ ' + dureeCourte(miniCumul.sec) + '</i>';
@@ -591,6 +656,7 @@
   }
 
   function tickMini() {
+    if (!el.mini) return;
     if (miniJusqua && Date.now() >= miniJusqua) {
       el.mini.classList.remove('is-on');
       miniJusqua = 0;
@@ -762,6 +828,49 @@
       return;
     }
 
+    if (listener === 'follower-latest') {
+      var qui = String(data.name || data.displayName || '').toLowerCase();
+      L(C_TITLE, 'FOLLOW  ' + (qui || '?'));
+
+      /* Un follow est gratuit et illimite : c-est le seul event du subathon
+         qu-un viewer peut declencher a volonte, en se desabonnant et en
+         resuivant. Deux garde-fous : on ne compte qu-une fois par personne,
+         et on peut plafonner le total par heure. */
+      if (qui) {
+        if (followsVus.indexOf(qui) > -1) {
+          L(C_SKIP, '     ignoré : « ' + qui + ' » a déjà été compté (unfollow/refollow)');
+          return;
+        }
+        followsVus.push(qui);
+        if (followsVus.length > 3000) followsVus.shift();
+      }
+
+      var plafond = num(F.followsMaxPerHour, 0);
+      if (plafond > 0) {
+        var ilYaUneHeure = Date.now() - 3600000, fi;
+        for (fi = followsRecents.length - 1; fi >= 0; fi--) {
+          if (followsRecents[fi] < ilYaUneHeure) followsRecents.splice(fi, 1);
+        }
+        if (followsRecents.length >= plafond) {
+          L(C_SKIP, '     ignoré : plafond de ' + plafond + ' follows par heure atteint');
+          return;
+        }
+        followsRecents.push(Date.now());
+      }
+
+      var secFollow = num(F.secPerFollow, 0);
+      if (secFollow <= 0 && num(F.ptsPerFollow, 0) <= 0) {
+        L(C_SKIP, '     ignoré : les follows ne rapportent rien (réglage à 0)');
+        return;
+      }
+      L(C_INFO, '     ' + Math.round(secFollow) + ' s et ' + num(F.ptsPerFollow, 0) + ' pt');
+      addTime(secFollow);
+      addPoints(num(F.ptsPerFollow, 0));
+      creditMini('follows', 1, secFollow, null, data._id || ('follow|' + qui), false);
+      L(C_INFO, '     état : ' + etat());
+      return;
+    }
+
     if (listener === 'message') {
       if (F.commandsEnabled === 'on') command(data);
       return;
@@ -780,13 +889,55 @@
   /* ---------------------------------------------------------
      Commandes chat (modérateurs + streamer)
      --------------------------------------------------------- */
+  /* Format STRICT hh:mm:ss, pour le champ de l-editeur uniquement.
+
+     L-editeur applique les champs a chaque frappe : une valeur incomplete
+     comme « 6 » serait sinon appliquee comme 6 secondes avant que la
+     streameuse ait fini de taper « 06:30:00 ». On n-accepte donc que la
+     forme complete, celle-la meme qu-affiche le chrono. Tout le reste est
+     considere comme une saisie en cours et purement ignore.
+
+     Retourne le nombre de secondes, ou null si la saisie n-est pas encore
+     complete. */
+  function parseStrict(s) {
+    var m = String(s || '').trim().match(/^(\d{1,3}):([0-5]?\d):([0-5]?\d)$/);
+    if (!m) return null;
+    return parseInt(m[1], 10) * 3600 + parseInt(m[2], 10) * 60 + parseInt(m[3], 10);
+  }
+
+  /* Format SOUPLE, pour les commandes de chat : un message arrive d-un bloc,
+     jamais caractere par caractere. On accepte donc hh:mm:ss, hh:mm, et les
+     ecritures a unites — 3h30, 90m, 45s. */
+  function parseSouple(s) {
+    s = String(s || '').trim();
+    // le signe est traite par l-appelant : on l-ecarte avant d-analyser,
+    // sinon « +01:00:00 » ne serait pas reconnu comme une duree hh:mm:ss
+    s = s.replace(/^[+-]/, '');
+    var m = s.match(/^(\d{1,3}):([0-5]?\d)(?::([0-5]?\d))?$/);
+    if (m) {
+      return parseInt(m[1], 10) * 3600 + parseInt(m[2], 10) * 60 +
+             (m[3] ? parseInt(m[3], 10) : 0);
+    }
+    return parseDur(s);
+  }
+
   function parseDur(s) {
     s = String(s || '').trim().toLowerCase();
     var re = /(\d+(?:[.,]\d+)?)\s*(h|m|s)?/g, m, total = 0, found = false;
+    var precedent = null;
     while ((m = re.exec(s)) !== null) {
       found = true;
       var v = parseFloat(m[1].replace(',', '.'));
-      total += v * (m[2] === 'h' ? 3600 : m[2] === 'm' ? 60 : 1);
+      var u = m[2];
+      /* Un nombre sans unite prend l-unite immediatement inferieure a celle
+         qui precede : « 3h30 » vaut 3 h 30 min, « 1h30m20 » ajoute 20 s.
+         Sans cela, le 30 de « 3h30 » serait lu en secondes — or c-est
+         l-ecriture naturelle, celle que l-on tape spontanement. */
+      if (!u) {
+        u = precedent === 'h' ? 'm' : precedent === 'm' ? 's' : 's';
+      }
+      total += v * (u === 'h' ? 3600 : u === 'm' ? 60 : 1);
+      precedent = u;
     }
     return found ? total : null;
   }
@@ -831,10 +982,15 @@
       var sub = (p[1] || '').toLowerCase();
       if (sub === 'pause')  return setPaused(true);
       if (sub === 'resume' || sub === 'start') return setPaused(false);
-      if (sub === 'set')    { var v = parseDur(p.slice(2).join('')); if (v !== null) setTime(v); return; }
+      if (sub === 'set')    {
+        var v = parseSouple(p.slice(2).join(''));
+        if (v !== null) { setTime(v); L(C_TITLE, 'commande : temps réglé sur ' + fmt(v * 1000)); }
+        else L(C_WARN, 'temps illisible. Exemples : 06:30:00, 3h30, 90m');
+        return;
+      }
       var raw = p.slice(1).join('');
       var sign = raw.charAt(0) === '-' ? -1 : 1;
-      var dur = parseDur(raw);
+      var dur = parseSouple(raw);
       if (dur !== null) addTime(sign * dur);
       return;
     }
@@ -847,10 +1003,8 @@
       return;
     }
     if (cmd === '!subathon' && (p[1] || '').toLowerCase() === 'reset') {
-      nouvelleEpoque();
-      S.points = 0; S.windowStart = 0; S.paused = false;
-      setTime(F.startHours * 3600 + F.startMinutes * 60);
-      syncGoals(false);
+      toutReinitialiser();
+      L(C_TITLE, 'commande : subathon réinitialisé');
     }
   }
 
@@ -892,6 +1046,9 @@
           gifted: true, bulkGifted: false, isCommunityGift: true
         });
       }
+    },
+    follow: function (name) {
+      emit('follower-latest', { name: name || ('Follower_' + Math.floor(Math.random() * 99999)) });
     },
     cheer: function (bits, name) {
       emit('cheer-latest', { name: name || 'Cheerer', amount: bits || 100, message: 'cheer!' });
@@ -953,16 +1110,13 @@
     mk('bits', '1k bits',   function () { sim.cheer(1000); });
     mk('bits', '10k bits',  function () { sim.cheer(10000); });
     mk('bits', 'Tip 5',     function () { sim.tip(5); });
+    mk('bits', 'Follow',    function () { sim.follow(); });
 
     mk('ctrl', '+1 min', function () { addTime(60); });
     mk('ctrl', '-1 min', function () { addTime(-60); });
     mk('ctrl', 'Pause',  function () { setPaused(!S.paused); });
     mk('ctrl', 'Chaos',  function () { sim.chaos(14); });
-    mk('ctrl', 'Reset',  function () {
-      S.points = 0; S.windowStart = 0; S.paused = false;
-      setTime(F.startHours * 3600 + F.startMinutes * 60);
-      syncGoals(false);
-    }, 'sb-warn');
+    mk('ctrl', 'Reset',  function () { toutReinitialiser(); }, 'sb-warn');
 
     setInterval(function () {
       var o = document.getElementById('sb-dbg-out');
@@ -982,6 +1136,15 @@
              encodeURIComponent(name).replace(/%20/g, '+') +
              ':wght@400;500;600;700&display=swap';
     el.root.style.setProperty('--font', "'" + name + "', 'Fredoka', sans-serif");
+
+    /* Les largeurs de texte changent quand la police arrive : sans ce
+       reajustement, un libelle mesure avec la police de secours garde une
+       taille inadaptee. */
+    if (document.fonts && document.fonts.ready && document.fonts.ready.then) {
+      document.fonts.ready.then(function () {
+        Object.keys(rows).forEach(function (k) { if (rows[k]) fitLabel(rows[k]); });
+      })['catch'](function () {});
+    }
   }
   /* Orientation de la fronde du coin haut-gauche. Chaque transformation depose
      la tige a une hauteur differente : `dy` la ramene sur le lisere. */
@@ -1011,10 +1174,21 @@
     return [(n >> 16) & 255, (n >> 8) & 255, n & 255].join(',');
   }
   function applyFields(fd) {
-    for (var key in D) if (fd && fd[key] !== undefined && fd[key] !== '') F[key] = fd[key];
+    /* Une valeur vide est normalement ignoree : cela evite qu-un champ non
+       renseigne dans StreamElements ecrase un defaut utile. Mais le champ de
+       temps DOIT pouvoir redevenir vide — c-est ce que fait `setField` apres
+       execution, et c-est ce qui libere le verrou. Sans cette exception, le
+       widget continuait de voir l-ancienne valeur et refusait de rejouer la
+       meme demande. */
+    var VIDABLES = { setTimeTo: 1 };
+    for (var key in D) {
+      if (!fd || fd[key] === undefined) continue;
+      if (fd[key] === '' && !VIDABLES[key]) continue;
+      F[key] = fd[key];
+    }
     ['scale','startHours','startMinutes','maxHours','beatSeconds','secSubT1','secSubT2','secSubT3',
-     'secSubPrime','giftTimeFactor','secPer100Bits','secPerTipUnit','ptsSubT1','ptsSubT2',
-     'ptsSubT3','ptsSubPrime','giftPointsFactor','ptsPer100Bits','ptsPerTipUnit',
+     'secSubPrime','giftTimeFactor','secPer100Bits','secPerTipUnit','secPerFollow','followsMaxPerHour','ptsSubT1','ptsSubT2',
+     'ptsSubT3','ptsSubPrime','giftPointsFactor','ptsPer100Bits','ptsPerTipUnit','ptsPerFollow',
      'goalsVisible','goalFontSize','goalsKeepDone','rotateDelay','alertDuration','miniDuration','alertBgOpacity',
      'glowOpacity','glowSize','foliageSize','windAmp','windBob','windSpeed'
     ].forEach(function (n) { F[n] = num(F[n], D[n]); });
@@ -1076,6 +1250,7 @@
 
     var avant = firstIncomplete();
     var pointsAvant = S.points, finAvant = S.endsAt, pauseAvant = S.paused;
+    var fenetreAvant = S.windowStart;
 
     if (volontaire) {
       S.endsAt      = v.endsAt;
@@ -1091,13 +1266,13 @@
     }
 
     var change = S.points !== pointsAvant || S.endsAt !== finAvant ||
-                 S.paused !== pauseAvant;
+                 S.paused !== pauseAvant || S.windowStart !== fenetreAvant;
     var enAvance = !volontaire &&
                    (S.points > num(v.points, 0) || S.endsAt > v.endsAt);
 
     if (change) {
       var apres = firstIncomplete();
-      el.timer.classList.toggle('is-paused', S.paused);
+      rafraichirPause();
       paintTimer();
       syncGoals(false);
       for (var i = avant; i < apres && i < goals.length; i++) {
@@ -1105,7 +1280,13 @@
                    ' » (' + goals[i].value + ')');
         pushAlert(String(F.alertText).replace(/\{goal\}/gi, goals[i].label));
       }
-      if (apres > avant) scheduleRotate();
+      /* Defilement des fournees. On ne peut PAS se contenter de `apres > avant` :
+         quand une instance recoit des points par synchronisation, les objectifs
+         sont deja comptes comme atteints des la recopie de S.points, donc les
+         deux valeurs sont egales et le defilement ne serait jamais programme.
+         On verifie donc directement si la fenetre doit bouger. */
+      if (apres > avant || targetWindowStart() !== S.windowStart ||
+          num(v.windowStart, 0) !== fenetreAvant) scheduleRotate(true);
       // Cette instance n-a pas recu l-event : elle affiche le gain sans en
       // connaitre l-origine. Si elle l-avait recu, les valeurs seraient deja
       // egales et on ne passerait pas ici — donc aucun doublon possible.
@@ -1125,8 +1306,267 @@
     if (enAvance) save();
   }
 
+  /* ---------------------------------------------------------
+     Actions pilotées depuis les Fields StreamElements.
+
+     StreamElements n-offre pas de bouton : on detourne donc une liste
+     deroulante et un champ texte. Chaque action est executee UNE FOIS puis
+     neutralisee, sinon un simple rechargement de page la rejouerait — un
+     reset accidentel en plein subathon serait catastrophique.
+
+     La neutralisation passe par la sauvegarde partagee : on y note la
+     signature de la derniere action jouee. Toutes les instances la voient,
+     donc une action n-est executee qu-une fois meme avec plusieurs onglets
+     ouverts, et elle ne se rejoue pas au redemarrage d-OBS.
+     --------------------------------------------------------- */
+  /* Bandeau d-etat affiche sur le widget lui-meme. Il repond a la seule
+     question que pose le selecteur bloque : « est-ce que mon action est
+     encore active ? ». Visible uniquement dans l-editeur et en mode test,
+     jamais a l-antenne. */
+  var champsRemisAZero = false, texteVu = null, sigEnCours = null,
+      sigDepuis = 0, bandeauTimer = null, verrouAction = '', verrouTemps = '';
+
+  function montrerBandeau(acte, brut, dejaFait) {
+    // Uniquement en Mode test. L-editeur ne suffit pas comme critere : la
+    // preview est elle aussi en mode editeur, et le bandeau y resterait
+    // affiche en permanence.
+    if (F.debugPanel !== 'on') return;
+    var b = document.getElementById('sb-action-banner');
+    if (!b) {
+      b = document.createElement('div');
+      b.id = 'sb-action-banner';
+      b.className = 'sb-banner';
+      document.body.appendChild(b);
+    }
+    var noms = { pause: 'Chrono mis en pause', resume: 'Chrono relancé',
+                 reset: 'Subathon remis à zéro', none: '' };
+    var quoi = [];
+    if (noms[acte]) quoi.push(noms[acte]);
+    if (brut) quoi.push('Temps réglé sur ' + brut);
+    if (!quoi.length) return;
+
+    /* Le conseil doit designer le bon champ : parler du « menu » alors que
+       seul le champ de temps a servi serait deroutant. */
+    var ouAgir;
+    if (acte !== 'none' && brut)  ouAgir = 'le menu sur « Aucune » et videz le champ de temps';
+    else if (acte !== 'none')     ouAgir = 'le menu sur « Aucune »';
+    else                          ouAgir = 'le champ de temps vide';
+
+    var quoiSuit = (acte !== 'none' && brut) ? 'les derniers réglages'
+                 : (acte !== 'none') ? 'le dernier choix' : 'la dernière saisie';
+
+    clearTimeout(bandeauTimer);
+    bandeauTimer = setTimeout(function () {
+      var e = document.getElementById('sb-action-banner');
+      if (e && e.parentNode) e.parentNode.removeChild(e);
+    }, dejaFait ? 6000 : 10000);
+
+    b.className = 'sb-banner' + (dejaFait ? ' sb-banner--done' : ' sb-banner--fresh');
+    b.innerHTML = (dejaFait ? '✓ ' : '● ') + quoi.join(' · ') +
+      '<br><small>' + (dejaFait
+        ? 'Déjà fait. L\'écran affiche encore ' + quoiSuit + ', mais ça n\'agit plus.'
+        : (champsRemisAZero
+            ? 'C\'est fait. Le règlage d\'action est revenu à son état neutre '
+            : 'C\'est fait. Remets ' + ouAgir + '.')) + '</small>';
+  }
+
+  /* `getOverlayStatus()` retourne une PROMESSE : la lire comme un objet
+     renvoyait toujours faux, et tout ce qui depend du mode editeur restait
+     inactif. On resout donc la promesse une fois au demarrage et on garde le
+     resultat. La forme synchrone est acceptee en repli, certaines versions
+     de StreamElements l-ayant exposee ainsi. */
+  var modeEditeur = null;
+
+  function detecterEditeur(apres) {
+    if (typeof SE_API === 'undefined' || !SE_API.getOverlayStatus) {
+      modeEditeur = false; return apres && apres();
+    }
+    try {
+      var r = SE_API.getOverlayStatus();
+      if (r && typeof r.then === 'function') {
+        r.then(function (st) {
+          modeEditeur = !!(st && st.isEditorMode);
+          if (apres) apres();
+        })['catch'](function () { modeEditeur = false; if (apres) apres(); });
+      } else {
+        modeEditeur = !!(r && r.isEditorMode);
+        if (apres) apres();
+      }
+    } catch (e) { modeEditeur = false; if (apres) apres(); }
+  }
+
+  function estEditeur() { return modeEditeur === true; }
+
+  /* Le champ de temps se tape caractere par caractere, et l-editeur applique
+     a la volee : sans attente, « 3h30 » declencherait quatre actions et le
+     champ serait vide des la premiere frappe. On laisse donc passer une
+     seconde et demie de silence avant d-agir.
+     Le menu deroulant, lui, n-a pas d-etat intermediaire : il agit tout de
+     suite. */
+  var attenteSaisie = null;
+
+  function appliquerAction() {
+    var brut = String(F.setTimeTo || '').trim();
+    var acte = F.action || 'none';
+
+    /* Chaque champ libere SON propre verrou en revenant a l-etat neutre, sans
+       dependre de l-autre : vider le champ de temps doit permettre de retaper
+       la meme valeur, meme si le menu est reste sur une action. Sans ce
+       decouplage, choisir « reset » une seconde fois — ou retaper le meme
+       temps — ne faisait rien. */
+    /* Chaque champ libere SON verrou des qu-il revient a l-etat neutre. Comme
+       `setField` le vide automatiquement apres execution, retaper la meme
+       valeur passe forcement par cet etat neutre : la demande suivante est
+       donc toujours honoree. */
+    if (acte === 'none') verrouAction = '';
+    if (!brut) verrouTemps = '';
+    if (acte === 'none' && !brut) {
+      /* La liberation doit etre ENREGISTREE, pas seulement gardee en memoire :
+         l-editeur StreamElements recharge entierement la page a chaque
+         changement de champ. Sans cette sauvegarde, le widget relisait
+         l-ancien « reset » depuis le magasin au chargement suivant et
+         refusait de le rejouer — il fallait passer par une autre action pour
+         changer la signature. */
+      if (S.lastAction) {
+        S.lastAction = '';
+        save();
+      }
+      sigEnCours = null;
+      texteVu = null;
+      return;
+    }
+
+    /* Plus aucune temporisation : une saisie incomplete est simplement
+       ignoree, ce qui rend le mecanisme insensible a la vitesse de frappe. */
+    if (brut && parseStrict(brut) === null) {
+      if (brut !== texteVu) {
+        texteVu = brut;
+        L(C_SKIP, 'saisie en cours : « ' + brut + ' » — format attendu hh:mm:ss, ' +
+                  'par exemple 06:30:00');
+      }
+      brut = '';
+      if (acte === 'none') return;
+    }
+    texteVu = brut;
+
+    /* Garde-fou immediat, en memoire. La sauvegarde de S.lastAction est
+       differee de 350 ms, or `setField` provoque aussitot un nouveau
+       chargement des champs : sans ce verrou en memoire, l-action serait
+       rejouee avant meme d-avoir ete enregistree. */
+    /* Verrou anti-rejeu immediat. Il ne dure que le temps d-un cycle de
+       chargement : sans cette expiration, revenir sur une action deja jouee
+       plus tot dans la session resterait bloque — c-est ce qui empechait un
+       « reset » de repartir apres etre passe par « pause » puis revenu. */
+    var sig = (acte || 'none') + '|' + brut;
+    if (sigEnCours === sig && Date.now() - sigDepuis < 2000) return;
+    sigEnCours = sig;
+    sigDepuis = Date.now();
+
+    executerAction(brut);
+  }
+
+  function executerAction(brutValide) {
+    var brut = brutValide !== undefined ? brutValide : String(F.setTimeTo || '').trim();
+    var acte = F.action || 'none';
+    if (acte === 'none' && !brut) return;
+
+    // signature : identique tant que les champs ne changent pas
+    var sig = acte + '|' + brut;
+    // dejaJoue : vrai seulement si CHAQUE partie a deja ete jouee telle quelle
+    /* Une action n-est « deja jouee » que si TOUT ce qu-elle demande a deja
+       ete joue, ET qu-il y a bien quelque chose a jouer. Le cas piege : menu
+       sur « Aucune » et temps retape a l-identique — la premiere condition
+       est vraie par defaut, il faut donc verifier que le temps l-est aussi
+       explicitement, et qu-il n-a pas ete libere entre-temps. */
+    /* Une action n-est « deja jouee » que si elle est identique a la
+       precedente ET que rien n-a ete relache entre-temps. `setField` vide le
+       champ apres coup : retaper la meme valeur produit donc une VRAIE
+       nouvelle demande, qu-il faut honorer. */
+    var actionDejaJouee = (acte === 'none') || (verrouAction === acte);
+    var tempsDejaJoue   = (!brut) || (verrouTemps === brut);
+    var dejaJoue = actionDejaJouee && tempsDejaJoue;
+    if (dejaJoue) {
+      /* Un widget StreamElements ne peut pas modifier ses propres Fields : le
+         selecteur reste donc affiche sur la derniere action choisie. On ne
+         peut pas remettre l-interface a zero, mais on peut le DIRE clairement
+         — a la fois dans la console et sur le widget lui-meme. */
+      L(C_SKIP, 'action déjà appliquée, sans effet. Le sélecteur reste affiché : c\'est ' +
+                'normal, un widget ne peut pas se remettre à zéro tout seul. Pour la ' +
+                'rejouer, repassez sur « Aucune », enregistrez, puis choisissez de nouveau.');
+      montrerBandeau(acte, brut, true);
+      return;
+    }
+    S.lastAction = sig;
+    if (acte !== 'none') verrouAction = acte;
+    if (brut) verrouTemps = brut;
+
+    /* Remise a zero des champs eux-memes. `SE_API.setField` ne fonctionne que
+       dans l-editeur et n-enregistre pas : la streameuse voit le menu revenir
+       sur « Aucune » et doit enregistrer pour figer. Le troisieme parametre a
+       false empeche le rechargement de l-overlay, qui rejouerait le cycle.
+       Hors editeur, la fonction est sans effet : le garde-fou par signature
+       reste donc la vraie protection. */
+    try {
+      if (typeof SE_API !== 'undefined' && SE_API.setField && estEditeur()) {
+        /* Vider un champ declenche un nouveau chargement, donc un nouveau
+           passage ici avec une signature differente. On ne remet a zero que
+           les champs qui ne le sont pas deja : sans cela, le vidage se
+           declencherait une seconde fois pour rien. */
+        if (acte !== 'none') SE_API.setField('action', 'none', false);
+        if (brut && String(F.setTimeTo || '').trim() !== '') {
+          SE_API.setField('setTimeTo', '', false);
+        }
+        champsRemisAZero = true;
+
+        /* Les champs viennent d-etre ramenes a leur etat neutre : le verrou
+           n-a plus lieu d-etre, puisqu-un rechargement ne relira plus
+           d-action a jouer. On le libere donc, sans quoi il faudrait
+           repasser MANUELLEMENT par « Aucune » avant chaque nouvelle
+           utilisation.
+           Sans danger pour la production : `setField` ne fonctionne que dans
+           l-editeur, donc dans OBS le verrou reste entier et un « reset »
+           oublie dans les reglages ne se rejouera jamais. */
+        S.lastAction = '';
+        verrouAction = '';
+        verrouTemps = '';
+        sigEnCours = null;
+        texteVu = null;
+        save();
+      }
+    } catch (e) { champsRemisAZero = false; }
+
+    montrerBandeau(acte, brut, false);
+
+    if (brut) {
+      var v = parseStrict(brut);
+      if (v === null) {
+        L(C_WARN, 'format attendu hh:mm:ss, par exemple 06:30:00');
+      } else {
+        setTime(v);
+        L(C_TITLE, 'ACTION : temps restant réglé sur ' + fmt(v * 1000));
+      }
+    }
+
+    if (acte === 'pause')      { setPaused(true);  L(C_TITLE, 'ACTION : mise en pause'); }
+    else if (acte === 'resume'){ setPaused(false); L(C_TITLE, 'ACTION : reprise'); }
+    else if (acte === 'reset') {
+      toutReinitialiser();
+      L(C_TITLE, 'ACTION : subathon réinitialisé — départ à ' +
+                 F.startHours + ' h ' + F.startMinutes);
+    }
+    save();
+  }
+
   function boot(fieldData) {
-    if (initStarted) { applyFields(fieldData); syncGoals(true); return; }
+    if (initStarted) {
+      /* Rechargement a chaud : l-editeur reapplique les champs a chaque
+         frappe. Il faut relancer l-action, sinon toute saisie posterieure au
+         premier chargement serait ignoree. */
+      applyFields(fieldData);
+      syncGoals(true);
+      appliquerAction();
+      return;
+    }
     initStarted = true;
 
     el.root      = $('#sb-root');
@@ -1150,6 +1590,18 @@
         S.windowStart = num(stored.windowStart, 0);
         S.rev         = num(stored.rev, 0);
         S.epoch       = num(stored.epoch, 0);
+        S.lastAction  = stored.lastAction || '';
+        // au redemarrage, les champs encore remplis sont consideres comme
+        // deja joues : c-est ce qui empeche un « reset » oublie de se rejouer
+        /* Les verrous reprennent l-etat sauvegarde : un « reset » encore
+           present dans les champs au redemarrage d-OBS ne doit pas se
+           rejouer. En session, ce sont les liberations plus haut qui font
+           foi — elles s-executent apres cette restauration. */
+        if (S.lastAction) {
+          var parts = String(S.lastAction).split('|');
+          verrouAction = parts[0] === 'none' ? '' : parts[0];
+          verrouTemps = parts[1] || '';
+        }
 
         /* Le widget n-a pas tourne pendant un moment : on restitue le temps
            restant tel qu-il etait au dernier battement, comme si le chrono
@@ -1170,7 +1622,7 @@
         S.endsAt = Date.now() + (F.startHours * 3600 + F.startMinutes * 60) * 1000;
       }
       S.booted = true;
-      el.timer.classList.toggle('is-paused', S.paused);
+      rafraichirPause();
       paintTimer();
       syncGoals(true);
       setInterval(function () { paintTimer(); tickAlert(); tickMini(); }, 250);
@@ -1185,6 +1637,9 @@
         if (F.offlineBehaviour === 'run') return;
         if (Date.now() - derniereEcriture >= num(F.beatSeconds, 30) * 1000) save();
       }, 5000);
+      // le mode editeur doit etre connu AVANT d-appliquer l-action :
+      // c-est lui qui autorise la remise a zero des champs
+      detecterEditeur(appliquerAction);
       if (F.debugPanel === 'on') buildDebug();
       L(C_TITLE, '═══ WIDGET PRÊT ═══');
       L(C_INFO, 'sauvegarde restaurée : ' + (stored ? 'OUI' : 'non (démarrage à neuf)') +
@@ -1198,6 +1653,10 @@
                 ' · subs offerts ×' + F.giftPointsFactor);
       L(C_INFO, 'bits : ' + F.secPer100Bits + ' s et ' + F.ptsPer100Bits +
                 ' pt par tranche de 100');
+      L(C_INFO, 'follow : ' + F.secPerFollow + ' s et ' + F.ptsPerFollow + ' pt' +
+                (num(F.followsMaxPerHour, 0) > 0
+                  ? ' · plafond ' + F.followsMaxPerHour + '/h' : ' · sans plafond') +
+                ' · un même viewer n\'est compté qu\'une fois');
       L(C_INFO, 'comptage des gift bombs : ' + F.giftMode);
       L(C_INFO, 'commandes chat : ' + (F.commandsEnabled === 'off' ? 'désactivées'
                 : (F.commandsWho === 'ownerAndMods' ? 'streameuse + modérateurs'
