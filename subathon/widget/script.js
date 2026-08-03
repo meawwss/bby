@@ -828,7 +828,7 @@
       addTime(secSub);
       addPoints(ptsForTier(tier) * count * factorP);
       creditMini('subs', count, secSub, tier,
-                 data._id || (data.name + '|' + data.amount), gifted);
+                 listener + '|' + (data._id || (data.name + '|' + data.amount)), gifted);
       L(C_INFO, '     état : ' + etat());
       return;
     }
@@ -843,7 +843,7 @@
       var secBits = bits / 100 * F.secPer100Bits;
       addTime(secBits);
       addPoints(bits / 100 * F.ptsPer100Bits);
-      creditMini('bits', bits, secBits, null, data._id || (data.name + '|' + bits));
+      creditMini('bits', bits, secBits, null, listener + '|' + (data._id || (data.name + '|' + bits)));
       L(C_INFO, '     état : ' + etat());
       return;
     }
@@ -855,7 +855,7 @@
       var secDon = amt * F.secPerTipUnit;
       addTime(secDon);
       addPoints(amt * F.ptsPerTipUnit);
-      creditMini('tips', 1, secDon, null, data._id || (data.name + '|' + amt));
+      creditMini('tips', 1, secDon, null, listener + '|' + (data._id || (data.name + '|' + amt)));
       L(C_INFO, '     état : ' + etat());
       return;
     }
@@ -898,7 +898,7 @@
       L(C_INFO, '     ' + Math.round(secFollow) + ' s et ' + num(F.ptsPerFollow, 0) + ' pt');
       addTime(secFollow);
       addPoints(num(F.ptsPerFollow, 0));
-      creditMini('follows', 1, secFollow, null, data._id || ('follow|' + qui), false);
+      creditMini('follows', 1, secFollow, null, listener + '|' + (data._id || ('follow|' + qui)), false);
       L(C_INFO, '     état : ' + etat());
       return;
     }
@@ -1266,6 +1266,24 @@
   function adopterEtat(v) {
     if (!v || typeof v !== 'object' || typeof v.endsAt !== 'number') return;
     if (v.by === INSTANCE) return;                    // echo de notre propre ecriture
+
+    /* Enregistrement defensif anti-doublon. StreamElements livre le MEME
+       event brut a chaque instance ouverte (Chrome, OBS, editeur) : si une
+       autre instance l-a deja credite et que ce widget-ci le recoit a son
+       tour un peu plus tard sur son propre socket, le filtre par _id de
+       handle() doit deja le reconnaitre comme traite — sinon il le credite
+       une seconde fois, et ce doublon regagne ensuite toutes les instances
+       via la fusion au maximum. On enregistre donc l-identifiant de l-event
+       synchronise AVANT toute autre logique, meme si rien d-autre ne change
+       dans cet appel. Le format (listener + « | » + id) est le meme que
+       celui pousse dans `seen` par handle(), donc les deux se recoupent. */
+    if (v.miniLast && v.miniLast.id) {
+      var cleExterne = String(v.miniLast.id);
+      if (seen.indexOf(cleExterne) === -1) {
+        seen.push(cleExterne);
+        if (seen.length > 120) seen.shift();
+      }
+    }
 
     /* Pas de comparaison de numero de version entre instances : chacune
        incremente le sien de son cote, ils ne sont pas comparables. On fusionne
