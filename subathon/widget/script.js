@@ -699,15 +699,37 @@
           signature de contenu, valable 1,5 s seulement. Ce second filtre ne
           se declenche jamais en production, puisque les vrais events ont
           toujours leur `_id`. */
-    if (data._id) {
-      if (seen.indexOf(data._id) > -1) {
-        L(C_SKIP, 'ignoré : doublon (même _id déjà reçu)');
-        return;
+    /* Le filtre ne s-applique QU-AUX types que l-on traite reellement.
+       StreamElements envoie d-abord un message generique « event » portant le
+       MEME `_id` que le message specifique qui suit : sans cette restriction,
+       le generique consommait l-identifiant et le vrai message — follow, sub,
+       cheer, don — etait rejete comme doublon. La cle inclut aussi le type,
+       pour que deux messages differents partageant un identifiant ne puissent
+       jamais s-annuler l-un l-autre. */
+    var TRAITES = { 'subscriber-latest': 1, 'cheer-latest': 1,
+                    'tip-latest': 1, 'follower-latest': 1 };
+    if (!TRAITES[listener]) {
+      // rien a dedupliquer : on laisse passer vers l-aiguillage plus bas
+    } else {
+      /* Filtre par IDENTIFIANT — couvre les reconnexions socket, ou le meme
+         event revient a l-identique avec son `_id`. */
+      if (data._id) {
+        var cle = listener + '|' + data._id;
+        if (seen.indexOf(cle) > -1) {
+          L(C_SKIP, 'ignoré : doublon (même _id déjà reçu pour ce type d\'event)');
+          return;
+        }
+        seen.push(cle);
+        if (seen.length > 120) seen.shift();
       }
-      seen.push(data._id);
-      if (seen.length > 120) seen.shift();
-    } else if (listener === 'subscriber-latest' || listener === 'cheer-latest' ||
-               listener === 'tip-latest') {
+
+      /* Filtre par CONTENU — applique a TOUS les events traites, avec ou sans
+         identifiant. L-emulateur delivre le meme sub deux fois : d-abord sans
+         `_id`, puis avec un `_id` ajoute. Le filtre par identifiant ne peut
+         donc pas les rapprocher, et la seconde livraison etait comptee. Deux
+         charges utiles identiques a moins de 1,5 s d-intervalle sont
+         forcement la meme chose livree deux fois : en production, deux vrais
+         events distincts different toujours par le pseudo du destinataire. */
       /* Uniquement sur les events qui creditent. Surtout PAS sur `message` :
          deux commandes de chat identiques ont la meme signature, la seconde
          serait avalee. */
@@ -720,6 +742,14 @@
         if (maintenant - recents[si].t > 20000) { recents.splice(si, 1); continue; }
         if (recents[si].s === sig) vu = recents[si];
       }
+
+      /* Un event porteur d-un `_id` NOUVEAU est forcement distinct : deux
+         cadeaux, deux resubs, deux cheers identiques ont chacun le leur. Le
+         filtre par contenu ne doit donc s-appliquer que lorsqu-au moins une
+         des deux livraisons n-a pas d-identifiant — c-est exactement le cas
+         de l-emulateur, qui envoie la meme chose une fois sans `_id` puis une
+         fois avec. */
+      if (vu && data._id && vu.id && vu.id !== data._id) vu = null;
 
       if (vu) {
         if (maintenant - vu.t < 1500) {
@@ -754,8 +784,10 @@
         }
         vu.n++;
         vu.t = maintenant;
+        if (data._id) vu.id = data._id;
       } else {
-        recents.push({ s: sig, t: maintenant, n: 1, averti: false });
+        recents.push({ s: sig, t: maintenant, n: 1, averti: false,
+                       id: data._id || null });
         if (recents.length > 60) recents.shift();
       }
     }
@@ -1352,8 +1384,8 @@
     else if (acte !== 'none')     ouAgir = 'le menu sur « Aucune »';
     else                          ouAgir = 'le champ de temps vide';
 
-    var quoiSuit = (acte !== 'none' && brut) ? 'les derniers réglages'
-                 : (acte !== 'none') ? 'le dernier choix' : 'la dernière saisie';
+    var quoiSuit = (acte !== 'none' && brut) ? 'vos derniers réglages'
+                 : (acte !== 'none') ? 'votre dernier choix' : 'votre dernière saisie';
 
     clearTimeout(bandeauTimer);
     bandeauTimer = setTimeout(function () {
@@ -1366,8 +1398,9 @@
       '<br><small>' + (dejaFait
         ? 'Déjà fait. L\'écran affiche encore ' + quoiSuit + ', mais ça n\'agit plus.'
         : (champsRemisAZero
-            ? 'C\'est fait. Le règlage d\'action est revenu à son état neutre '
-            : 'C\'est fait. Remets ' + ouAgir + '.')) + '</small>';
+            ? 'C\'est fait. Les réglages sont revenus à leur état neutre — ' +
+              'enregistrez pour le conserver.'
+            : 'C\'est fait. Remettez ' + ouAgir + '.')) + '</small>';
   }
 
   /* `getOverlayStatus()` retourne une PROMESSE : la lire comme un objet
@@ -1499,6 +1532,7 @@
     S.lastAction = sig;
     if (acte !== 'none') verrouAction = acte;
     if (brut) verrouTemps = brut;
+
 
     /* Remise a zero des champs eux-memes. `SE_API.setField` ne fonctionne que
        dans l-editeur et n-enregistre pas : la streameuse voit le menu revenir
