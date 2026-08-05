@@ -351,9 +351,6 @@
   46%, 62%  { transform: translateX(calc(var(--sc-dist, 0px) * -1)); }
   94%, 100% { transform: translateX(0); }
 }
-@media (prefers-reduced-motion: reduce) {
-  .sb-goal--scroll .sb-goal__text { animation: none; }
-}
 .sb-goal__value {
   position: relative;
   margin-left: auto;
@@ -468,8 +465,29 @@
 .sb-banner--done  { box-shadow: 0 0 0 2px #B4CC80, 0 6px 20px rgba(0, 0, 0, .4); opacity: .9; }
 
 /* ============================================================
-   ACCESSIBILITÉ
+   MOUVEMENT — ne pas remettre de requête « prefers-reduced-motion » ici
+
+   Cette section contenait :
+
+     @media (prefers-reduced-motion: reduce) {
+       .sb-root * { animation-duration: .01ms !important; ... }
+     }
+
+   Deux problemes qui se cumulaient dans OBS :
+
+   1. Le navigateur integre d-OBS (CEF) repond « reduce » a cette requete
+      alors que personne ne l-a demande. La regle s-appliquait donc TOUJOURS
+      en production, et jamais dans un navigateur normal pendant les tests.
+
+   2. Ecraser la DUREE d-une animation `infinite` ne l-arrete pas : elle
+      reboucle toutes les 0,01 ms. Le feuillage et la pulsation de pause
+      rejouaient leur cycle en continu — d-ou le clignotement rapide, et
+      l-impression que l-animation ne marchait pas. Pour neutraliser une
+      animation il faut `animation: none`, ou au minimum forcer
+      `animation-iteration-count: 1`.
+
+   Les animations de ce widget sont lentes et decoratives. Sur un overlay de
+   stream, elles ne posent pas le probleme que cette requete cherche a
+   eviter. Elles restent donc actives, et se coupent par les champs :
+   « Vent — amplitude » a 0 immobilise le feuillage.
    ============================================================ */
-@media (prefers-reduced-motion: reduce) {
-  .sb-root * { animation-duration: .01ms !important; transition-duration: .01ms !important; }
-}

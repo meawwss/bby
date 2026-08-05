@@ -686,150 +686,182 @@
          : F.ptsSubT1;
   }
 
+  /* --- GIFT BOMBS -----------------------------------------------------
+
+     Twitch annonce une bombe par un event RECAPITULATIF (`bulkGifted`,
+     `amount` = nombre de subs offerts), puis envoie normalement un event par
+     sub reellement delivre. Mais ce n-est PAS garanti : le bouton
+     « Community Gift » de StreamElements n-envoie que le recapitulatif et
+     rien derriere.
+
+     Aucune des deux regles simples ne tient donc :
+       - compter le recap ET les individuels  → double comptage,
+       - ne compter que les individuels       → rien quand ils manquent,
+       - ne compter que le recap              → rien quand c-est lui qui manque.
+
+     Regle retenue : le recapitulatif est credite TOUT DE SUITE pour le
+     nombre annonce, et il ouvre une avance du meme montant. Les events
+     individuels qui suivent viennent consommer cette avance sans rien
+     crediter — ils sont deja payes. Une fois l-avance epuisee, ou la fenetre
+     expiree, les subs offerts recomptent normalement.
+
+     L-ordre inverse est couvert aussi : si des individuels sont arrives
+     AVANT le recapitulatif, ils sont deduits du montant annonce.
+
+     Consequence : aucun delai nulle part, le timer bouge a l-instant meme
+     dans les deux cas de figure. */
+  var FENETRE_BOMBE  = 60000;   // duree de vie de l-avance ouverte par un recap
+  var FENETRE_AVANCE = 15000;   // individuels arrives juste AVANT le recap
+  var bombes = [];
+  var giftsRecents = {};        // gifteur -> horodatages des subs offerts credites
+
+  function cleGifteur(d) {
+    return String((d && (d.sender || d.name)) || '?').toLowerCase();
+  }
+
+  function noterGift(cle) {
+    var t = Date.now();
+    var l = giftsRecents[cle] || (giftsRecents[cle] = []);
+    l.push(t);
+    while (l.length && t - l[0] > FENETRE_AVANCE) l.shift();
+    if (l.length > 200) l.shift();
+  }
+
+  function giftsJusteAvant(cle) {
+    var t = Date.now(), l = giftsRecents[cle] || [], n = 0, i;
+    for (i = 0; i < l.length; i++) if (t - l[i] <= FENETRE_AVANCE) n++;
+    return n;
+  }
+
+  function bombeDe(cle) {
+    var t = Date.now(), i;
+    for (i = bombes.length - 1; i >= 0; i--) {
+      if (t - bombes[i].t > FENETRE_BOMBE) { bombes.splice(i, 1); continue; }
+      if (bombes[i].cle === cle) return bombes[i];
+    }
+    return null;
+  }
+
+  /* Recapitulatif : credit immediat du solde restant a payer. */
+  function crediterBombe(data) {
+    var cle = cleGifteur(data);
+    var nom = data.sender || data.name || '?';
+    var tier = tierOf(data);
+    var annonce = Math.max(1, parseInt(data.amount, 10) || 1);
+
+    // des individuels ont-ils devance le recapitulatif ?
+    var deja = Math.min(annonce, giftsJusteAvant(cle));
+    var aPayer = annonce - deja;
+
+    if (deja > 0) {
+      L(C_INFO, '     ' + deja + ' event' + (deja > 1 ? 's' : '') +
+                ' individuel' + (deja > 1 ? 's' : '') + ' deja compte' +
+                (deja > 1 ? 's' : '') + ' avant le recapitulatif — deduit' +
+                (deja > 1 ? 's' : '') + ' du montant annonce');
+    }
+
+    if (aPayer <= 0) {
+      L(C_SKIP, '     rien a crediter : les ' + annonce + ' subs etaient deja comptes');
+      return;
+    }
+
+    // l-avance couvre les individuels qui vont suivre
+    bombes.push({ cle: cle, nom: nom, tier: tier, avance: aPayer, t: Date.now() });
+    if (bombes.length > 30) bombes.shift();
+
+    var secSub = secForTier(tier) * aPayer * F.giftTimeFactor;
+    var ptsSub = ptsForTier(tier) * aPayer * F.giftPointsFactor;
+
+    L(C_TITLE, 'GIFT BOMB · ' + nom + ' offre ' + annonce + ' sub' +
+               (annonce > 1 ? 's' : '') + ' — credite immediatement pour ' + aPayer);
+    L(C_INFO, '     → ' + Math.round(secSub) + ' s et ' + ptsSub + ' pt' +
+              ' · les events individuels qui suivent seront absorbes');
+
+    addTime(secSub);
+    addPoints(ptsSub);
+    creditMini('subs', aPayer, secSub, tier, 'bombe|' + cle + '|' + Date.now(), true);
+    L(C_INFO, '     etat : ' + etat());
+  }
+
+  /* Event individuel d-un sub offert. Renvoie true s-il a deja ete paye par
+     le recapitulatif : l-appelant ne doit alors pas crediter. */
+  function absorberParBombe(data) {
+    var cle = cleGifteur(data);
+    var b = bombeDe(cle);
+
+    if (b && b.avance > 0) {
+      b.avance--;
+      L(C_SKIP, '     absorbe : deja paye par le recapitulatif de ' + b.nom +
+                ' (' + b.avance + ' d\'avance restante)');
+      return true;
+    }
+
+    noterGift(cle);
+    return false;
+  }
+
   function handle(listener, data) {
     if (!listener || !data) return;
 
-    /* Anti-doublon, deux niveaux.
+    /* Anti-doublon : UNIQUEMENT par identifiant `_id`.
 
-       1. Les VRAIS events StreamElements portent un `_id` unique : c-est le
-          filtre principal, il couvre les reconnexions socket.
-       2. L-emulateur de l-editeur, lui, delivre le meme event DEUX FOIS —
-          une fois sous l-emballage de test, une fois sous sa forme normale —
-          et ses charges utiles n-ont pas d-`_id`. On retombe alors sur une
-          signature de contenu, valable 1,5 s seulement. Ce second filtre ne
-          se declenche jamais en production, puisque les vrais events ont
-          toujours leur `_id`. */
-    /* Le filtre ne s-applique QU-AUX types que l-on traite reellement.
-       StreamElements envoie d-abord un message generique « event » portant le
-       MEME `_id` que le message specifique qui suit : sans cette restriction,
-       le generique consommait l-identifiant et le vrai message — follow, sub,
-       cheer, don — etait rejete comme doublon. La cle inclut aussi le type,
-       pour que deux messages differents partageant un identifiant ne puissent
-       jamais s-annuler l-un l-autre. */
+       Chaque vrai event StreamElements en porte un, unique. Deux subs offerts
+       par la meme personne, dans la meme seconde, au meme tier, ont donc
+       chacun le leur : ils ne peuvent plus se confondre.
+
+       L-ancien filtre « par signature de contenu » comparait pseudo + montant
+       + tier + expediteur, et bloquait au-dela de N payloads identiques. Sur
+       une gift bomb les events individuels se ressemblent par construction :
+       il les avalait les uns apres les autres. C-est LUI qui mangeait les
+       gift bombs. Supprime. */
     var TRAITES = { 'subscriber-latest': 1, 'cheer-latest': 1,
                     'tip-latest': 1, 'follower-latest': 1 };
-    if (!TRAITES[listener]) {
-      // rien a dedupliquer : on laisse passer vers l-aiguillage plus bas
-    } else {
-      /* Filtre par IDENTIFIANT — couvre les reconnexions socket, ou le meme
-         event revient a l-identique avec son `_id`. */
-      if (data._id) {
-        var cle = listener + '|' + data._id;
-        if (seen.indexOf(cle) > -1) {
-          L(C_SKIP, 'ignoré : doublon (même _id déjà reçu pour ce type d\'event)');
-          return;
-        }
-        seen.push(cle);
-        if (seen.length > 120) seen.shift();
+    if (TRAITES[listener] && data._id) {
+      var cle = listener + '|' + data._id;
+      if (seen.indexOf(cle) > -1) {
+        L(C_SKIP, 'ignore : doublon (_id deja traite pour ce type d\'event)');
+        return;
       }
-
-      /* Filtre par CONTENU — applique a TOUS les events traites, avec ou sans
-         identifiant. L-emulateur delivre le meme sub deux fois : d-abord sans
-         `_id`, puis avec un `_id` ajoute. Le filtre par identifiant ne peut
-         donc pas les rapprocher, et la seconde livraison etait comptee. Deux
-         charges utiles identiques a moins de 1,5 s d-intervalle sont
-         forcement la meme chose livree deux fois : en production, deux vrais
-         events distincts different toujours par le pseudo du destinataire. */
-      /* Uniquement sur les events qui creditent. Surtout PAS sur `message` :
-         deux commandes de chat identiques ont la meme signature, la seconde
-         serait avalee. */
-      var sig = listener + '|' + (data.name || '') + '|' + (data.amount || '') + '|' +
-                (data.tier || '') + '|' + (data.sender || '') + '|' +
-                (data.gifted ? 1 : 0) + (data.bulkGifted ? 1 : 0) + (data.isCommunityGift ? 1 : 0);
-      var maintenant = Date.now(), si, vu = null;
-      for (si = recents.length - 1; si >= 0; si--) {
-        // une signature n-expire qu-apres 20 s de silence
-        if (maintenant - recents[si].t > 20000) { recents.splice(si, 1); continue; }
-        if (recents[si].s === sig) vu = recents[si];
-      }
-
-      /* Un event porteur d-un `_id` NOUVEAU est forcement distinct : deux
-         cadeaux, deux resubs, deux cheers identiques ont chacun le leur. Le
-         filtre par contenu ne doit donc s-appliquer que lorsqu-au moins une
-         des deux livraisons n-a pas d-identifiant — c-est exactement le cas
-         de l-emulateur, qui envoie la meme chose une fois sans `_id` puis une
-         fois avec. */
-      if (vu && data._id && vu.id && vu.id !== data._id) vu = null;
-
-      if (vu) {
-        if (maintenant - vu.t < 1500) {
-          L(C_SKIP, 'ignoré : event identique reçu il y a moins de 1,5 s et sans _id ' +
-                    '(l\'émulateur de l\'éditeur envoie deux fois le même)');
-          vu.t = maintenant;
-          return;
-        }
-        /* Garde-fou contre l-emballement. L-emulateur de l-editeur peut
-           reemettre le meme event en boucle pendant des minutes : sans cela,
-           un exemplaire passerait toutes les 1,5 s et le compteur monterait
-           sans fin. On tolere quatre occurrences identiques par tranche de
-           20 s — de quoi cliquer plusieurs fois de suite sur un bouton de
-           test — puis on coupe jusqu-a ce que la source se taise. */
-        /* Les charges utiles de l-emulateur portent `isTest`. Or son emulation
-           de gift bomb est buggee : elle envoie N fois le MEME destinataire au
-           lieu de N destinataires differents. Sur ces events-la, une seule
-           occurrence par signature suffit donc. Cliquer plusieurs fois sur un
-           bouton de test reste possible : l-emulateur tire un pseudo different
-           a chaque clic, donc la signature change. */
-        var maxIdentiques = (data.isTest === true) ? 1 : 4;
-        if (vu.n >= maxIdentiques) {
-          if (!vu.averti) {
-            L(C_WARN, 'RÉPÉTITION IGNORÉE : « ' + (data.name || '?') + ' » réémis à ' +
-                      'l\'identique sans _id' + (data.isTest ? ' (event de test)' : '') +
-                      '. Comptage suspendu pour cette signature jusqu\'à 20 s de silence. ' +
-                      'Il s\'agit de l\'émulateur de l\'éditeur, pas d\'un vrai event.');
-            vu.averti = true;
-          }
-          vu.t = maintenant;
-          return;
-        }
-        vu.n++;
-        vu.t = maintenant;
-        if (data._id) vu.id = data._id;
-      } else {
-        recents.push({ s: sig, t: maintenant, n: 1, averti: false,
-                       id: data._id || null });
-        if (recents.length > 60) recents.shift();
-      }
+      seen.push(cle);
+      if (seen.length > 120) seen.shift();
     }
 
     if (listener === 'subscriber-latest') {
       var gifted = data.gifted === true || data.gifted === 'true';
-      var bulk = data.bulkGifted === true;
-      var community = data.isCommunityGift === true;
-      var tier = tierOf(data);
+      var bulk   = data.bulkGifted === true;
+      var tier   = tierOf(data);
 
       L(C_TITLE, 'SUB  tier=' + tier +
                  ' · offert=' + (gifted ? 'OUI' : 'non') +
-                 ' · récapitulatif=' + (bulk ? 'OUI' : 'non') +
-                 ' · individuel=' + (community ? 'OUI' : 'non') +
-                 ' · amount=' + data.amount +
-                 (gifted && bulk ? ' (= nb de subs offerts)' : ' (= nb de mois, PAS un multiplicateur)'));
+                 ' · recapitulatif=' + (bulk ? 'OUI' : 'non') +
+                 ' · amount=' + data.amount + ' (jamais utilise comme multiplicateur)');
 
-      // dédup gift bomb : on choisit UNE source, jamais les deux
-      if (F.giftMode === 'individual' && bulk) {
-        L(C_SKIP, '     ignoré : récapitulatif écarté (mode « events individuels »)');
-        return;
-      }
-      if (F.giftMode === 'bulk' && community) {
-        L(C_SKIP, '     ignoré : event individuel écarté (mode « récapitulatif »)');
-        return;
-      }
+      /* Chaque sub reellement delivre produit UN event, compte pour 1.
 
-      // attention : data.amount = nb de MOIS sur un resub, nb de SUBS sur un récap
-      var count = (gifted && bulk) ? Math.max(1, parseInt(data.amount, 10) || 1) : 1;
+         `amount` n-est JAMAIS un multiplicateur ici : sur un resub c-est un
+         nombre de mois, sur un sub offert c-est l-anciennete du destinataire.
+         Seul le recapitulatif y met un nombre de subs — il part en
+         credit immediat, voir crediterBombe(). */
+      if (bulk) { crediterBombe(data); return; }
+
+      /* Sub offert : il appartient peut-etre a une bombe deja creditee. Dans
+         ce cas il est absorbe, sinon il compte normalement pour 1. */
+      if (gifted || data.isCommunityGift === true) {
+        if (absorberParBombe(data)) return;
+      }
 
       var factorT = gifted ? F.giftTimeFactor : 1;
       var factorP = gifted ? F.giftPointsFactor : 1;
-      L(C_INFO, '     compté comme ' + count + ' sub' + (count > 1 ? 's' : '') +
-                ' → ' + Math.round(secForTier(tier) * count * factorT) + ' s et ' +
-                (ptsForTier(tier) * count * factorP) + ' pt');
+      var secSub = secForTier(tier) * factorT;
+      var ptsSub = ptsForTier(tier) * factorP;
 
-      var secSub = secForTier(tier) * count * factorT;
+      L(C_INFO, '     compte pour 1 sub → ' + Math.round(secSub) + ' s et ' + ptsSub + ' pt');
+
       addTime(secSub);
-      addPoints(ptsForTier(tier) * count * factorP);
-      creditMini('subs', count, secSub, tier,
-                 listener + '|' + (data._id || (data.name + '|' + data.amount)), gifted);
-      L(C_INFO, '     état : ' + etat());
+      addPoints(ptsSub);
+      creditMini('subs', 1, secSub, tier,
+                 listener + '|' + (data._id || (data.name + '|' + Date.now())), gifted);
+      L(C_INFO, '     etat : ' + etat());
       return;
     }
 
@@ -1709,7 +1741,7 @@
                 (num(F.followsMaxPerHour, 0) > 0
                   ? ' · plafond ' + F.followsMaxPerHour + '/h' : ' · sans plafond') +
                 ' · un même viewer n\'est compté qu\'une fois');
-      L(C_INFO, 'comptage des gift bombs : ' + F.giftMode);
+      L(C_INFO, 'gift bombs : le recapitulatif est credite immediatement, les events individuels qui suivent sont absorbes');
       L(C_INFO, 'commandes chat : ' + (F.commandsEnabled === 'off' ? 'désactivées'
                 : (F.commandsWho === 'ownerAndMods' ? 'streameuse + modérateurs'
                                                     : 'streameuse UNIQUEMENT')) +
@@ -1739,8 +1771,20 @@
     var data = obj.detail.event;
     if (!data) return;
 
+    /* StreamElements livre CHAQUE event deux fois : une fois sous le listener
+       generique « event » (ou « event:test » depuis l-emulateur) qui emballe
+       le vrai message, une fois sous son listener propre. On ignore
+       l-emballage et on ne traite que la livraison directe.
+
+       C-est ce qui remplace l-ancien filtre par signature : plus besoin de
+       deviner si deux payloads identiques sont un doublon, on ne recoit
+       simplement plus le doublon. */
+    if ((listener === 'event' || listener === 'event:test') && data.listener) {
+      L(C_SKIP, 'emballage « ' + listener + ' » ignore (le message direct « ' +
+                data.listener + ' » suit)');
+      return;
+    }
     var emballe = false;
-    // les events de TEST de StreamElements sont emballés différemment
     if (data.listener) { listener = data.listener; data = data.event || data; emballe = true; }
 
     if (listener !== 'message') {
