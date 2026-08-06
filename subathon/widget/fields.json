@@ -260,7 +260,7 @@
   "goalsList": {
     "type": "text",
     "label": "Objectifs — « nom|palier » séparés par des points-virgules. Paliers CUMULÉS et croissants.",
-    "value": "Killer roulette (DBD)|5; Game viewers avec perks aléatoires|10; Battle royale 3 facts 1 lie sur moi|25; Jeu du crabe sur Roblox|50; Petite radio horreur|75; 1v1 viewers (DBD, LoL ou échecs)|100; Smash or pass (fictifs edition)|125; Tournoi de musique avec cadeau!|150; Pick random sur LoL (en classé)|175; Aventure jeu solo au choix|200; Lecture creepypastas|225; ASMR + squishy jusqu'au prochain palier|250; Buldak avec toute la sauce qui pique...|300; On lit mes demandes de DM|325; Giveaway cartes cadeaux Steam ou Riot|350; Je me transforme en trad goth|400; Popsauce|425; Jeu d'horreur dans le noir|450; On fait un puzzle (repos)|500; Serveur communautaire Minecraft|600; Live IRL à la salle|700; Je me teins les cheveux en rose|800; Je crée un compte cosplay + cosplay au choix|900; Je rajoute 24 h + nouveaux goals|1000",
+    "value": "Killer roulette (DBD)|5; Game viewers avec perks aléatoires|10; Battle royale 3 facts 1 lie sur moi|25; Jeu du crabe sur Roblox|50; Petite radio horreur|75; 1v1 viewers (DBD, LoL ou échecs)|100; Smash or pass (fictifs edition)|125; Tournoi de musique avec cadeau!|150; Pick random sur LoL (en classé)|175; Aventure jeu solo au choix|200; Lecture creepypastas|225; ASMR + squishy jusqu'au prochain palier|250; Buldak avec toute la sauce qui pique...|300; On lit mes demandes de DM|325; Giveaway cartes cadeaux Steam ou Riot|350; Je me transforme en trad goth|400; Jeu d'horreur dans le noir|450; On fait un puzzle (repos)|500; Serveur communautaire Minecraft|600; Live IRL à la salle|700; Je me teins les cheveux en rose|800; Je crée un compte cosplay + cosplay au choix|900; Je rajoute 24 h + nouveaux goals|1000",
     "group": "Objectifs"
   },
   "goalsVisible": {
@@ -484,15 +484,5 @@
     "min": 20,
     "max": 100,
     "group": "Couleurs"
-  },
-  "giftMode": {
-    "type": "dropdown",
-    "label": "Comptage des gift bombs — à valider avec un vrai gift bomb",
-    "value": "individual",
-    "options": {
-      "individual": "Events individuels (recommandé)",
-      "bulk": "Event récapitulatif"
-    },
-    "group": "Avancé"
   }
 }

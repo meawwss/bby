@@ -495,8 +495,62 @@
       }
       scheduleRotate();
     }
+    /* Un retrait de points est une correction manuelle : la fenetre doit
+       pouvoir redescendre, exactement comme sur setPoints. Sans cela,
+       « !points -50 » barrait des objectifs sans jamais revenir en arriere. */
+    if (p < 0) recalculerFenetre();
     save();
     syncGoals(false);
+  }
+
+  /* Reglage ABSOLU des points, en une operation autoritaire.
+
+     `addPoints` ne monte l-epoque que sur un delta negatif : une valeur posee
+     a la hausse n-est donc pas marquee comme volontaire, et se fait battre au
+     maximum par une instance restee sur un chiffre plus haut. C-est le piege
+     dans lequel tombe toute correction manuelle faite a chaud.
+
+     Ici on monte l-epoque dans tous les cas : la valeur s-impose aux autres
+     instances, a la hausse comme a la baisse. Aucune alerte n-est jouee — une
+     correction manuelle n-est pas un objectif atteint. */
+  /* La fenetre d-objectifs ne fait qu-AVANCER : en mode « fournee »,
+     targetWindowStart() part de S.windowStart et ne redescend jamais. Apres
+     toute correction MANUELLE a la baisse, la liste resterait donc bloquee
+     sur l-ancienne fournee. On la recalcule depuis zero.
+
+     Indispensable et pas cosmetique : une commande chat est recue par TOUTES
+     les instances, chacune avec son propre windowStart, et l-ecriture qui
+     suit est autoritaire. Sans recalcul, l-instance restee sur une fournee
+     haute la reimposerait a toutes les autres. */
+  function recalculerFenetre() {
+    recalculerFenetre();
+  }
+
+  function setPoints(p) {
+    nouvelleEpoque();
+    var avant = firstIncomplete();
+    var ancien = S.points;
+    S.points = Math.max(0, num(p, 0));
+
+    /* La fenetre d-objectifs ne fait qu-AVANCER : en mode « fournee »,
+       targetWindowStart() part de S.windowStart et ne redescend jamais. Apres
+       une correction a la baisse, la liste resterait donc bloquee sur
+       l-ancienne fournee. On la recalcule depuis zero.
+
+       C-est indispensable ici, et pas seulement cosmetique : la commande est
+       recue par TOUTES les instances, chacune avec son propre windowStart, et
+       l-ecriture qui suit est autoritaire. Sans ce recalcul, l-instance restee
+       sur une fournee haute la reimposerait a toutes les autres. */
+    S.windowStart = 0;
+    S.windowStart = targetWindowStart();
+    L(C_TITLE, 'REGLAGE MANUEL : points ' + Math.round(ancien) + '  →  ' +
+               Math.round(S.points) + '   (s-impose aux autres instances)');
+    save();
+    syncGoals(false);
+    if (firstIncomplete() !== avant || targetWindowStart() !== S.windowStart) {
+      scheduleRotate(true);
+    }
+    L(C_INFO, '     etat : ' + etat());
   }
 
   /* ---------------------------------------------------------
@@ -743,8 +797,9 @@
   }
 
   /* Recapitulatif : credit immediat du solde restant a payer. */
-  function crediterBombe(data) {
+  function crediterBombe(data, dejaPaye) {
     var cle = cleGifteur(data);
+    var idBombe = idEvent('subscriber-latest', data);
     var nom = data.sender || data.name || '?';
     var tier = tierOf(data);
     var annonce = Math.max(1, parseInt(data.amount, 10) || 1);
@@ -769,6 +824,14 @@
     bombes.push({ cle: cle, nom: nom, tier: tier, avance: aPayer, t: Date.now() });
     if (bombes.length > 30) bombes.shift();
 
+    /* Bombe deja payee par une autre instance : on ouvre uniquement la
+       fenetre d-absorption, sans rien crediter. */
+    if (dejaPaye) {
+      L(C_SKIP, '     fenetre d-absorption ouverte pour ' + aPayer + ' sub' +
+                (aPayer > 1 ? 's' : '') + ' (deja payes par une autre instance)');
+      return;
+    }
+
     var secSub = secForTier(tier) * aPayer * F.giftTimeFactor;
     var ptsSub = ptsForTier(tier) * aPayer * F.giftPointsFactor;
 
@@ -779,7 +842,7 @@
 
     addTime(secSub);
     addPoints(ptsSub);
-    creditMini('subs', aPayer, secSub, tier, 'bombe|' + cle + '|' + Date.now(), true);
+    creditMini('subs', aPayer, secSub, tier, idBombe || ('bombe|' + cle), true);
     L(C_INFO, '     etat : ' + etat());
   }
 
@@ -800,6 +863,40 @@
     return false;
   }
 
+  /* --- IDENTITE D-UN EVENT, IDENTIQUE SUR TOUTES LES INSTANCES ---------
+
+     Deux instances qui recoivent le meme event doivent en calculer le MEME
+     identifiant, sinon la protection croisee ne peut pas reconnaitre ce
+     qu-une autre a deja paye — et l-event est credite deux fois.
+
+     La plupart des events portent un `_id` : il suffit. Le recapitulatif
+     d-un community gift, lui, n-en a PAS (ses champs sont name, sender,
+     displayName, amount, count, tier, message, bulkGifted, type,
+     originalEventName). On le derive donc de son contenu, qui est identique
+     partout. Deux bombes reellement distinctes du meme gifteur, de meme
+     taille et de meme tier, se confondraient — mais elles sont separees par
+     la fenetre d-absorption, et se confondre est ici moins grave que se
+     compter double. */
+  function idEvent(listener, data) {
+    if (data && data._id) return listener + '|' + data._id;
+    if (data && data.bulkGifted === true) {
+      return 'bulk|' + String(data.sender || data.name || '?').toLowerCase() +
+             '|' + (parseInt(data.amount, 10) || 1) + '|' + tierOf(data);
+    }
+    return null;
+  }
+
+  /* Registre des derniers events credites par CETTE instance. Il voyage dans
+     la sauvegarde : une instance qui adopte un etat apprend d-un coup tout ce
+     que l-autre a deja paye, et pas seulement le dernier event. */
+  function noterCredite(id) {
+    if (!id) return;
+    if (!S.credited) S.credited = [];
+    if (S.credited.indexOf(id) > -1) return;
+    S.credited.push(id);
+    while (S.credited.length > 40) S.credited.shift();
+  }
+
   function handle(listener, data) {
     if (!listener || !data) return;
 
@@ -816,14 +913,26 @@
        gift bombs. Supprime. */
     var TRAITES = { 'subscriber-latest': 1, 'cheer-latest': 1,
                     'tip-latest': 1, 'follower-latest': 1 };
-    if (TRAITES[listener] && data._id) {
-      var cle = listener + '|' + data._id;
-      if (seen.indexOf(cle) > -1) {
-        L(C_SKIP, 'ignore : doublon (_id deja traite pour ce type d\'event)');
+    var idEvt = TRAITES[listener] ? idEvent(listener, data) : null;
+    if (idEvt) {
+      if (seen.indexOf(idEvt) > -1) {
+        L(C_SKIP, 'ignore : deja credite (ici ou sur une autre instance)');
+        /* Un recapitulatif deja paye ailleurs ne doit PAS etre credite, mais
+           il doit quand meme ouvrir sa fenetre d-absorption : sinon les
+           events individuels de la bombe arrivent ensuite sans rien pour les
+           absorber, et cette instance les compte en plus du recapitulatif. */
+        if (data.bulkGifted === true) crediterBombe(data, true);
+        /* Un sub offert deja paye ailleurs doit quand meme consommer l-avance
+           de sa bombe ici : sinon l-avance de cette instance reste trop haute
+           et absorberait a tort un gift ulterieur du meme gifteur. */
+        else if (data.gifted === true || data.isCommunityGift === true) {
+          absorberParBombe(data);
+        }
         return;
       }
-      seen.push(cle);
+      seen.push(idEvt);
       if (seen.length > 120) seen.shift();
+      noterCredite(idEvt);
     }
 
     if (listener === 'subscriber-latest') {
@@ -1033,6 +1142,18 @@
       return;
     }
 
+    executer(text);
+  }
+
+  /* Corps des commandes, SANS controle de droits. Deux appelants :
+     - command(), qui a deja verifie que l-emetteur a le droit ;
+     - SUBATHON.cmd(), depuis la console — y avoir acces suppose deja un acces
+       a la machine, il n-y a donc rien de plus a verifier.
+     Un seul chemin pour les deux, donc un seul comportement a maintenir. */
+  function executer(text) {
+    text = String(text || '').trim();
+    if (text.charAt(0) !== '!') text = '!' + text;
+
     var p = text.split(/\s+/);
     var cmd = p[0].toLowerCase();
 
@@ -1060,10 +1181,15 @@
     }
     if (cmd === '!points') {
       var s2 = (p[1] || '').toLowerCase();
-      if (s2 === 'set') { nouvelleEpoque(); S.points = Math.max(0, num(p[2], S.points));
-                         save(); syncGoals(false); return; }
+      if (s2 === 'set') {
+        var cible = num(p[2], null);
+        if (cible === null) { L(C_WARN, 'valeur illisible. Exemple : !points set 44'); return; }
+        setPoints(cible);
+        return;
+      }
       var delta = num(p[1], 0);
       if (delta) addPoints(delta);
+      else L(C_WARN, 'usage : !points set 44  (valeur absolue)  ou  !points -3  (ajout)');
       return;
     }
     if (cmd === '!subathon' && (p[1] || '').toLowerCase() === 'reset') {
@@ -1309,12 +1435,23 @@
        synchronise AVANT toute autre logique, meme si rien d-autre ne change
        dans cet appel. Le format (listener + « | » + id) est le meme que
        celui pousse dans `seen` par handle(), donc les deux se recoupent. */
-    if (v.miniLast && v.miniLast.id) {
-      var cleExterne = String(v.miniLast.id);
-      if (seen.indexOf(cleExterne) === -1) {
-        seen.push(cleExterne);
+    /* On enregistre TOUT ce que l-autre instance a deja paye, avant toute
+       autre logique. Sans cela, cette instance adopte un etat qui contient
+       deja l-event, puis recoit l-event sur son propre socket et le credite
+       une seconde fois : c-est la source du double comptage entre instances.
+
+       Le registre porte les 40 derniers identifiants, et non le seul dernier
+       event : si l-autre instance en a encaisse plusieurs avant que cette
+       sauvegarde n-arrive, ils sont tous couverts. */
+    var registre = (v.credited && v.credited.length) ? v.credited
+                 : (v.miniLast && v.miniLast.id ? [String(v.miniLast.id)] : []);
+    for (var ri = 0; ri < registre.length; ri++) {
+      var idExterne = String(registre[ri]);
+      if (seen.indexOf(idExterne) === -1) {
+        seen.push(idExterne);
         if (seen.length > 120) seen.shift();
       }
+      noterCredite(idExterne);
     }
 
     /* Pas de comparaison de numero de version entre instances : chacune
@@ -1805,11 +1942,18 @@
   // @ts-ignore — propriété ajoutée volontairement à window ; TypeScript ne
   // connaît pas cette clé, mais StreamElements exécute du JavaScript pur.
   window.SUBATHON = {
+    /* Toute commande chat, depuis la console. Le « ! » est facultatif.
+         SUBATHON.cmd('points set 44')
+         SUBATHON.cmd('timer set 05:36:00')
+         SUBATHON.cmd('pause')
+       Utile quand on n-a pas les droits sur le chat de la chaine. */
+    cmd: executer,
     simulate: sim,
     addTime: addTime,
     setTime: setTime,
     setPaused: setPaused,
     addPoints: addPoints,
+    setPoints: setPoints,
     state: function () { return S; },
     fields: function () { return F; },
     boot: boot
