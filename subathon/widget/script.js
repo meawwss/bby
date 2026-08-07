@@ -59,6 +59,7 @@
     commandsWho: 'owner',
     consoleLogs: 'on',
     instanceSync: 'on',
+    soldeSilence: 30,
     debugPanel: 'off',
 
     glowColor: '#B4CC80',
@@ -108,12 +109,35 @@
       C_SKIP  = 'color:#d9a441',
       C_WARN  = 'color:#e07a5f;font-weight:bold';
 
+  /* Detecteur de rafale. Une gift bomb de 300 produit plus de 600 lignes de
+     console, chacune avec le dump complet du payload : les outils de
+     developpement saturent et l-overlay parait fige. Au-dela de RAFALE_SEUIL
+     lignes par seconde on passe en journal compact, en annoncant combien de
+     lignes ont ete supprimees. Le comptage n-est pas touche. */
+  var RAFALE_SEUIL = 25, rafaleT = 0, rafaleN = 0, rafaleTus = 0;
+
+  function rafale() {
+    var t = Date.now();
+    if (t - rafaleT > 1000) {
+      if (rafaleTus > 0) {
+        console.log('%c[SUBATHON] … ' + rafaleTus +
+                    ' lignes de journal supprimees (rafale d-events)', C_SKIP);
+      }
+      rafaleT = t; rafaleN = 0; rafaleTus = 0;
+    }
+    rafaleN++;
+    if (rafaleN > RAFALE_SEUIL) { rafaleTus++; return true; }
+    return false;
+  }
+
   function L(css, msg) {
     if (F.consoleLogs === 'off') return;
+    if (rafale()) return;
     console.log('%c[SUBATHON] ' + msg, css);
   }
   function Lraw(label, obj) {
     if (F.consoleLogs === 'off') return;
+    if (rafale()) return;
     var champs = '';
     try {
       if (obj && typeof obj === 'object' && !(obj instanceof Array)) {
@@ -740,127 +764,180 @@
          : F.ptsSubT1;
   }
 
-  /* --- GIFT BOMBS -----------------------------------------------------
+  /* --- GIFT BOMBS : LE MAILLON PAIE, LE RECAPITULATIF RATTRAPE --------
 
-     Twitch annonce une bombe par un event RECAPITULATIF (`bulkGifted`,
-     `amount` = nombre de subs offerts), puis envoie normalement un event par
-     sub reellement delivre. Mais ce n-est PAS garanti : le bouton
-     « Community Gift » de StreamElements n-envoie que le recapitulatif et
-     rien derriere.
+     Twitch annonce une bombe par un RECAPITULATIF (`bulkGifted`, `amount` =
+     nombre de subs), puis envoie normalement un event par sub delivre. Mais
+     ce n-est pas garanti : le bouton « Community Gift » de StreamElements
+     n-envoie que le recapitulatif, et l-inverse existe aussi.
 
-     Aucune des deux regles simples ne tient donc :
-       - compter le recap ET les individuels  → double comptage,
-       - ne compter que les individuels       → rien quand ils manquent,
-       - ne compter que le recap              → rien quand c-est lui qui manque.
+     Priorite retenue : LE MAILLON PAIE TOUT DE SUITE.
 
-     Regle retenue : le recapitulatif est credite TOUT DE SUITE pour le
-     nombre annonce, et il ouvre une avance du meme montant. Les events
-     individuels qui suivent viennent consommer cette avance sans rien
-     crediter — ils sont deja payes. Une fois l-avance epuisee, ou la fenetre
-     expiree, les subs offerts recomptent normalement.
+     Chaque sub offert est credite a l-instant ou son event arrive, sans
+     jamais consulter l-etat laisse par les events precedents. Aucun sub ne
+     peut donc etre avale, quel que soit l-enchainement — c-etait le defaut de
+     la version precedente, ou une bombe ouverte absorbait a tort le gift
+     suivant du meme gifteur.
 
-     L-ordre inverse est couvert aussi : si des individuels sont arrives
-     AVANT le recapitulatif, ils sont deduits du montant annonce.
+     Le recapitulatif, lui, ne credite plus a l-aveugle : il note ce qu-il
+     annonce, attend DELAI_RECAP, puis ne paie QUE le solde que les maillons
+     n-ont pas couvert. Dans le cas normal — les maillons arrivent — ce solde
+     vaut zero et le recapitulatif ne fait rien : le chrono a deja bouge, sub
+     par sub, en temps reel. Le delai ne se voit que dans le cas ou les
+     maillons ne viennent jamais, et sans lui ces subs seraient perdus.
 
-     Consequence : aucun delai nulle part, le timer bouge a l-instant meme
-     dans les deux cas de figure. */
-  var FENETRE_BOMBE  = 60000;   // duree de vie de l-avance ouverte par un recap
-  var FENETRE_AVANCE = 15000;   // individuels arrives juste AVANT le recap
-  var bombes = [];
-  var giftsRecents = {};        // gifteur -> horodatages des subs offerts credites
+     Le rapprochement ne passe PAS par le pseudo du gifteur. Les maillons
+     credites alimentent une reserve commune, et chaque recapitulatif y puise
+     son du. Deux bombes simultanees consomment donc la meme reserve : au pire
+     l-imputation est faussee, jamais le total. C-est ce qui rend le comptage
+     insensible a un expediteur incoherent — l-emulateur StreamElements en
+     genere un different par sub, ce qui faisait compter 594 subs sur une
+     emulation de 300.
 
-  function cleGifteur(d) {
-    return String((d && (d.sender || d.name)) || '?').toLowerCase();
+     Enfin, si un solde a du etre paye, les maillons en retard qui arriveraient
+     apres ne doivent pas etre payes deux fois : ils consomment cette avance.
+     C-est le seul endroit ou un event en regarde un autre, et il n-est actif
+     que dans le cas anormal ou Twitch a livre moins de maillons qu-annonce. */
+  /* Le solde ne se declenche pas apres un delai fixe, mais quand le flux de
+     maillons s-est TU. Une bombe de 200 peut etre livree en une minute :
+     solder au bout de 8 s revenait a payer 142 maillons pas encore arrives,
+     puis a les recompter en arrivant. */
+  var DELAI_RECAP    = 8000;    // premiere verification apres le recapitulatif
+  var SILENCE_REQUIS = 30000;   // silence a observer avant de solder — voir applyFields()
+  /* Plafond de patience. Il ne sert que si un flux de maillons ne se tarit
+     jamais — livraison pathologiquement lente, ou events sans rapport. Large,
+     car solder trop tot est ce qui produit le sur-comptage. */
+  var PLAFOND_ATTENTE = 600000; // 10 min
+  var dernierMaillon = 0;       // horodatage du dernier maillon recu
+  /* Retention des maillons dans la reserve. Elle doit couvrir la duree
+     COMPLETE de livraison d-une grosse bombe : StreamElements peut egrener
+     200 maillons sur plus d-une minute, et avec 30 s les premiers etaient
+     purges avant que le solde puisse les revendiquer — il les croyait
+     manquants et les repayait.
+
+     Une retention longue est sans danger : imputerAuRecap() n-accepte que
+     les maillons posterieurs a SON recapitulatif, un vieux maillon ne peut
+     donc pas etre impute a une bombe recente. */
+  var FENETRE_REPART = 900000;  // 15 min : DOIT rester superieur a
+                                // PLAFOND_ATTENTE, sinon le solde travaille
+                                // sur une reserve deja tronquee et repaie
+                                // des maillons qu-il avait bien recus.
+  var TOLERANCE_AVANT = 2000;   // maillons admis juste AVANT leur recapitulatif
+  /* L-avance rattrape les maillons arrives APRES le solde. Sa fenetre est
+     GLISSANTE : chaque retardataire absorbe la prolonge. Elle survit donc
+     aussi longtemps que le flux continue, et meurt apres ce delai de silence.
+
+     Une fenetre fixe et longue ne convient pas — elle avalerait un gift
+     legitime arrivant bien plus tard, ce qui s-est produit. Une fenetre
+     courte non plus — les retardataires d-une livraison lente la
+     depasseraient. Le silence est le bon critere, comme pour le solde. */
+  var FENETRE_AVANCE  = 60000;  // silence apres lequel l-avance expire (2 x SILENCE_REQUIS)
+
+  var maillonsLibres = [];      // { t: horodatage, pris: deja impute a un recap }
+  var avancePayee    = 0;       // maillons deja payes par un solde de recapitulatif
+  var avanceJusqua   = 0;       // au-dela, l-avance est perimee
+
+  function purgerReserve() {
+    var limite = Date.now() - FENETRE_REPART;
+    while (maillonsLibres.length && maillonsLibres[0].t < limite) maillonsLibres.shift();
   }
 
-  function noterGift(cle) {
-    var t = Date.now();
-    var l = giftsRecents[cle] || (giftsRecents[cle] = []);
-    l.push(t);
-    while (l.length && t - l[0] > FENETRE_AVANCE) l.shift();
-    if (l.length > 200) l.shift();
+  /* Maillon d-une bombe : credit immediat, et depot dans la reserve pour
+     qu-un recapitulatif puisse s-en deduire. */
+  function noterMaillon() {
+    dernierMaillon = Date.now();
+    purgerReserve();
+    maillonsLibres.push({ t: Date.now(), pris: false });
+    if (maillonsLibres.length > 10000) maillonsLibres.shift();
   }
 
-  function giftsJusteAvant(cle) {
-    var t = Date.now(), l = giftsRecents[cle] || [], n = 0, i;
-    for (i = 0; i < l.length; i++) if (t - l[i] <= FENETRE_AVANCE) n++;
-    return n;
-  }
+  /* Combien de maillons ce recapitulatif-ci peut-il revendiquer ?
 
-  function bombeDe(cle) {
-    var t = Date.now(), i;
-    for (i = bombes.length - 1; i >= 0; i--) {
-      if (t - bombes[i].t > FENETRE_BOMBE) { bombes.splice(i, 1); continue; }
-      if (bombes[i].cle === cle) return bombes[i];
+     UNIQUEMENT ceux arrives dans SA fenetre : apres lui, ou juste avant si
+     Twitch a livre les maillons en premier. Un maillon deja impute a un autre
+     recapitulatif ne peut pas l-etre deux fois.
+
+     Sans cette borne, la reserve etait globale sur 30 s : les maillons d-une
+     bombe payaient le recapitulatif de la SUIVANTE, qui se croyait couvert et
+     ne creditait rien. Une bombe arrivant dans la demi-minute apres une autre
+     pouvait ainsi compter zero — c-est le « subgift juste derriere qui ne
+     compte pas ». */
+  function imputerAuRecap(n, tRecap) {
+    purgerReserve();
+    var debut = tRecap - TOLERANCE_AVANT, pris = 0, i;
+    for (i = 0; i < maillonsLibres.length && pris < n; i++) {
+      if (!maillonsLibres[i].pris && maillonsLibres[i].t >= debut) {
+        maillonsLibres[i].pris = true;
+        pris++;
+      }
     }
-    return null;
+    return pris;
   }
 
-  /* Recapitulatif : credit immediat du solde restant a payer. */
-  function crediterBombe(data, dejaPaye) {
-    var cle = cleGifteur(data);
-    var idBombe = idEvent('subscriber-latest', data);
-    var nom = data.sender || data.name || '?';
-    var tier = tierOf(data);
-    var annonce = Math.max(1, parseInt(data.amount, 10) || 1);
-
-    // des individuels ont-ils devance le recapitulatif ?
-    var deja = Math.min(annonce, giftsJusteAvant(cle));
-    var aPayer = annonce - deja;
-
-    if (deja > 0) {
-      L(C_INFO, '     ' + deja + ' event' + (deja > 1 ? 's' : '') +
-                ' individuel' + (deja > 1 ? 's' : '') + ' deja compte' +
-                (deja > 1 ? 's' : '') + ' avant le recapitulatif — deduit' +
-                (deja > 1 ? 's' : '') + ' du montant annonce');
-    }
-
-    if (aPayer <= 0) {
-      L(C_SKIP, '     rien a crediter : les ' + annonce + ' subs etaient deja comptes');
-      return;
-    }
-
-    // l-avance couvre les individuels qui vont suivre
-    bombes.push({ cle: cle, nom: nom, tier: tier, avance: aPayer, t: Date.now() });
-    if (bombes.length > 30) bombes.shift();
-
-    /* Bombe deja payee par une autre instance : on ouvre uniquement la
-       fenetre d-absorption, sans rien crediter. */
-    if (dejaPaye) {
-      L(C_SKIP, '     fenetre d-absorption ouverte pour ' + aPayer + ' sub' +
-                (aPayer > 1 ? 's' : '') + ' (deja payes par une autre instance)');
-      return;
-    }
-
-    var secSub = secForTier(tier) * aPayer * F.giftTimeFactor;
-    var ptsSub = ptsForTier(tier) * aPayer * F.giftPointsFactor;
-
-    L(C_TITLE, 'GIFT BOMB · ' + nom + ' offre ' + annonce + ' sub' +
-               (annonce > 1 ? 's' : '') + ' — credite immediatement pour ' + aPayer);
-    L(C_INFO, '     → ' + Math.round(secSub) + ' s et ' + ptsSub + ' pt' +
-              ' · les events individuels qui suivent seront absorbes');
-
-    addTime(secSub);
-    addPoints(ptsSub);
-    creditMini('subs', aPayer, secSub, tier, idBombe || ('bombe|' + cle), true);
-    L(C_INFO, '     etat : ' + etat());
-  }
-
-  /* Event individuel d-un sub offert. Renvoie true s-il a deja ete paye par
-     le recapitulatif : l-appelant ne doit alors pas crediter. */
-  function absorberParBombe(data) {
-    var cle = cleGifteur(data);
-    var b = bombeDe(cle);
-
-    if (b && b.avance > 0) {
-      b.avance--;
-      L(C_SKIP, '     absorbe : deja paye par le recapitulatif de ' + b.nom +
-                ' (' + b.avance + ' d\'avance restante)');
+  /* Un maillon a-t-il deja ete paye par le solde d-un recapitulatif ? */
+  function dejaPayeParSolde() {
+    if (avancePayee > 0 && Date.now() < avanceJusqua) {
+      avancePayee--;
+      var t = Date.now();
+      dernierMaillon = t;                  // un solde en attente doit patienter
+      avanceJusqua = t + FENETRE_AVANCE;   // fenetre glissante
       return true;
     }
-
-    noterGift(cle);
     return false;
+  }
+
+  /* Recapitulatif : on note, on attend, on ne paie que le manque. */
+  function planifierRecap(data) {
+    var nom  = data.sender || data.name || '?';
+    var tier = tierOf(data);
+    var n    = Math.max(1, parseInt(data.amount, 10) || 1);
+
+    L(C_TITLE, 'GIFT BOMB · ' + nom + ' annonce ' + n + ' sub' + (n > 1 ? 's' : ''));
+    L(C_INFO, '     les maillons sont credites un par un des leur arrivee · ' +
+              'solde eventuel ' + Math.round(SILENCE_REQUIS / 1000) +
+              ' s apres le dernier maillon recu');
+
+    var tRecap = Date.now();
+
+    function verifier() {
+      var t = Date.now();
+
+      /* Tant que des maillons continuent d-arriver, on ne solde pas : ils
+         appartiennent probablement a cette bombe. On repasse dans une
+         seconde. Le plafond evite d-attendre indefiniment si un flux sans
+         rapport ne se tarit jamais. */
+      if (t - dernierMaillon < SILENCE_REQUIS && t - tRecap < PLAFOND_ATTENTE) {
+        setTimeout(verifier, 1000);
+        return;
+      }
+
+      var couverts = imputerAuRecap(n, tRecap);
+      var manque = n - couverts;
+
+      if (manque <= 0) {
+        L(C_OK, 'gift bomb de ' + nom + ' : ' + n + ' maillon' + (n > 1 ? 's' : '') +
+                ' recu' + (n > 1 ? 's' : '') + ' et deja credite' + (n > 1 ? 's' : '') +
+                ' — rien a solder');
+        return;
+      }
+
+      var secSub = secForTier(tier) * manque * F.giftTimeFactor;
+      var ptsSub = ptsForTier(tier) * manque * F.giftPointsFactor;
+
+      L(C_TITLE, 'SOLDE gift bomb · ' + nom + ' : ' + couverts + '/' + n +
+                 ' maillons livres → les ' + manque + ' manquants sont credites');
+      L(C_INFO, '     → ' + Math.round(secSub) + ' s et ' + ptsSub + ' pt');
+
+      avancePayee += manque;                        // au cas ou ils arrivent en retard
+      avanceJusqua = Date.now() + FENETRE_AVANCE;
+
+      addTime(secSub);
+      addPoints(ptsSub);
+      creditMini('subs', manque, secSub, tier, 'solde|' + nom + '|' + Date.now(), true);
+      L(C_INFO, '     etat : ' + etat());
+    }
+
+    setTimeout(verifier, DELAI_RECAP);
   }
 
   /* --- IDENTITE D-UN EVENT, IDENTIQUE SUR TOUTES LES INSTANCES ---------
@@ -877,13 +954,46 @@
      taille et de meme tier, se confondraient — mais elles sont separees par
      la fenetre d-absorption, et se confondre est ici moins grave que se
      compter double. */
+  /* Identifiant partageable d-un event.
+
+     `null` pour un recapitulatif de community gift : il ne porte NI `_id` NI
+     horodatage, et le deriver de son contenu — gifteur + montant + tier —
+     rendait deux bombes identiques du meme gifteur indiscernables. La seconde
+     etait alors prise pour un doublon et perdue, meme dix secondes plus tard,
+     puisque le registre `seen` garde 120 entrees. C-etait le « subgift juste
+     derriere qui ne compte pas ».
+
+     La relivraison immediate par StreamElements reste couverte, mais par une
+     comparaison purement locale et tres courte : voir relivraisonRecap(). */
   function idEvent(listener, data) {
     if (data && data._id) return listener + '|' + data._id;
-    if (data && data.bulkGifted === true) {
-      return 'bulk|' + String(data.sender || data.name || '?').toLowerCase() +
-             '|' + (parseInt(data.amount, 10) || 1) + '|' + tierOf(data);
-    }
     return null;
+  }
+
+  /* Garde anti-relivraison, locale et bornee a 1,5 s. On ne compare que
+     l-horloge de cette machine avec elle-meme, jamais avec une autre. Une
+     vraie seconde bombe identique arrivant en moins de 1,5 s serait perdue —
+     c-est le seul angle mort, et il est bien plus etroit que le precedent. */
+  /* 1,5 s collapsait deux bombes reellement distinctes du meme gifteur
+     envoyees coup sur coup. Une relivraison par StreamElements arrive dans la
+     milliseconde ; 400 ms suffisent et reduisent d-autant l-angle mort. */
+  var FENETRE_RELIVRAISON = 400;
+  var recapsRecents = [];
+
+  function cleRecap(data) {
+    return String(data.sender || data.name || '?').toLowerCase() +
+           '|' + (parseInt(data.amount, 10) || 1) + '|' + tierOf(data);
+  }
+
+  function relivraisonRecap(data) {
+    var cle = cleRecap(data), t = Date.now(), i;
+    for (i = recapsRecents.length - 1; i >= 0; i--) {
+      if (t - recapsRecents[i].t > FENETRE_RELIVRAISON) { recapsRecents.splice(i, 1); continue; }
+      if (recapsRecents[i].cle === cle) return true;
+    }
+    recapsRecents.push({ cle: cle, t: t });
+    if (recapsRecents.length > 20) recapsRecents.shift();
+    return false;
   }
 
   /* Registre des derniers events credites par CETTE instance. Il voyage dans
@@ -921,13 +1031,6 @@
            il doit quand meme ouvrir sa fenetre d-absorption : sinon les
            events individuels de la bombe arrivent ensuite sans rien pour les
            absorber, et cette instance les compte en plus du recapitulatif. */
-        if (data.bulkGifted === true) crediterBombe(data, true);
-        /* Un sub offert deja paye ailleurs doit quand meme consommer l-avance
-           de sa bombe ici : sinon l-avance de cette instance reste trop haute
-           et absorberait a tort un gift ulterieur du meme gifteur. */
-        else if (data.gifted === true || data.isCommunityGift === true) {
-          absorberParBombe(data);
-        }
         return;
       }
       seen.push(idEvt);
@@ -950,13 +1053,26 @@
          `amount` n-est JAMAIS un multiplicateur ici : sur un resub c-est un
          nombre de mois, sur un sub offert c-est l-anciennete du destinataire.
          Seul le recapitulatif y met un nombre de subs — il part en
-         credit immediat, voir crediterBombe(). */
-      if (bulk) { crediterBombe(data); return; }
+         rattrapage differe, voir planifierRecap(). */
+      /* Recapitulatif : il ne paie rien maintenant, voir planifierRecap(). */
+      if (bulk) {
+        if (relivraisonRecap(data)) {
+          L(C_SKIP, '     ignore : recapitulatif relivre a l\'instant par StreamElements');
+          return;
+        }
+        planifierRecap(data);
+        return;
+      }
 
-      /* Sub offert : il appartient peut-etre a une bombe deja creditee. Dans
-         ce cas il est absorbe, sinon il compte normalement pour 1. */
-      if (gifted || data.isCommunityGift === true) {
-        if (absorberParBombe(data)) return;
+      /* Maillon d-une bombe : credit immediat. Il n-est ecarte que s-il a
+         deja ete paye par le solde d-un recapitulatif, cas anormal ou Twitch
+         avait livre moins de maillons qu-annonce. */
+      if (data.isCommunityGift === true) {
+        if (dejaPayeParSolde()) {
+          L(C_SKIP, '     ignore : deja paye par le solde d-un recapitulatif');
+          return;
+        }
+        noterMaillon();
       }
 
       var factorT = gifted ? F.giftTimeFactor : 1;
@@ -1382,6 +1498,23 @@
      'goalsVisible','goalFontSize','goalsKeepDone','rotateDelay','alertDuration','miniDuration','alertBgOpacity',
      'glowOpacity','glowSize','foliageSize','windAmp','windBob','windSpeed'
     ].forEach(function (n) { F[n] = num(F[n], D[n]); });
+
+    /* Seuil de silence avant de solder un recapitulatif, reglable.
+
+       En production il ne devrait JAMAIS servir : Twitch envoie l-annonce
+       initiale puis les gifts individuels, donc au moment du solde tout est
+       deja credite et le manque vaut zero. Il n-existe que pour le cas ou les
+       maillons ne viennent pas du tout.
+
+       Mais la distribution des subs prend un temps VARIABLE cote Twitch. Un
+       seuil trop court risquerait de solder au milieu d-une distribution
+       lente, puis de recompter les retardataires. On prend donc large : le
+       cout d-un seuil genereux est nul en production, celui d-un seuil trop
+       court est un comptage faux. */
+    F.soldeSilence = num(F.soldeSilence, 30);
+    if (F.soldeSilence < 5) F.soldeSilence = 5;
+    SILENCE_REQUIS = F.soldeSilence * 1000;
+    FENETRE_AVANCE = SILENCE_REQUIS * 2;
 
     var s = el.root.style;
     s.setProperty('--scale', F.scale);
