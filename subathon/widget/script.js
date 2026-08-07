@@ -54,12 +54,11 @@
     miniAlerts: 'on',
     miniDuration: 3,
 
-    giftMode: 'individual',      // 'individual' | 'bulk'
     commandsEnabled: 'on',
     commandsWho: 'owner',
     consoleLogs: 'on',
     instanceSync: 'on',
-    soldeSilence: 30,
+    soldeSilence: 10,
     debugPanel: 'off',
 
     glowColor: '#B4CC80',
@@ -547,7 +546,8 @@
      suit est autoritaire. Sans recalcul, l-instance restee sur une fournee
      haute la reimposerait a toutes les autres. */
   function recalculerFenetre() {
-    recalculerFenetre();
+    S.windowStart = 0;
+    S.windowStart = targetWindowStart();
   }
 
   function setPoints(p) {
@@ -556,17 +556,7 @@
     var ancien = S.points;
     S.points = Math.max(0, num(p, 0));
 
-    /* La fenetre d-objectifs ne fait qu-AVANCER : en mode « fournee »,
-       targetWindowStart() part de S.windowStart et ne redescend jamais. Apres
-       une correction a la baisse, la liste resterait donc bloquee sur
-       l-ancienne fournee. On la recalcule depuis zero.
-
-       C-est indispensable ici, et pas seulement cosmetique : la commande est
-       recue par TOUTES les instances, chacune avec son propre windowStart, et
-       l-ecriture qui suit est autoritaire. Sans ce recalcul, l-instance restee
-       sur une fournee haute la reimposerait a toutes les autres. */
-    S.windowStart = 0;
-    S.windowStart = targetWindowStart();
+    recalculerFenetre();
     L(C_TITLE, 'REGLAGE MANUEL : points ' + Math.round(ancien) + '  →  ' +
                Math.round(S.points) + '   (s-impose aux autres instances)');
     save();
@@ -802,8 +792,12 @@
      maillons s-est TU. Une bombe de 200 peut etre livree en une minute :
      solder au bout de 8 s revenait a payer 142 maillons pas encore arrives,
      puis a les recompter en arrivant. */
-  var DELAI_RECAP    = 8000;    // premiere verification apres le recapitulatif
-  var SILENCE_REQUIS = 30000;   // silence a observer avant de solder — voir applyFields()
+  /* Premiere verification apres le recapitulatif. Elle etait figee a 8 s,
+     donc le champ de reglage ne pilotait pas le cas le plus visible : un
+     community gift sans aucun maillon attendait toujours 8 s, meme regle a 6.
+     Elle suit desormais le champ, et un seul reglage commande tout. */
+  var DELAI_RECAP    = 12000;   // = SILENCE_REQUIS, voir applyFields()
+  var SILENCE_REQUIS = 12000;   // silence a observer avant de solder — voir applyFields()
   /* Plafond de patience. Il ne sert que si un flux de maillons ne se tarit
      jamais — livraison pathologiquement lente, ou events sans rapport. Large,
      car solder trop tot est ce qui produit le sur-comptage. */
@@ -833,9 +827,10 @@
      depasseraient. Le silence est le bon critere, comme pour le solde. */
   var FENETRE_AVANCE  = 60000;  // silence apres lequel l-avance expire (2 x SILENCE_REQUIS)
 
-  var maillonsLibres = [];      // { t: horodatage, pris: deja impute a un recap }
+  var maillonsLibres = [];      // { t, id, pris: deja impute a un recap }
   var avancePayee    = 0;       // maillons deja payes par un solde de recapitulatif
   var avanceJusqua   = 0;       // au-dela, l-avance est perimee
+  var avanceId       = null;    // identifiant de la bombe que cette avance couvre
 
   function purgerReserve() {
     var limite = Date.now() - FENETRE_REPART;
@@ -844,10 +839,10 @@
 
   /* Maillon d-une bombe : credit immediat, et depot dans la reserve pour
      qu-un recapitulatif puisse s-en deduire. */
-  function noterMaillon() {
+  function noterMaillon(id) {
     dernierMaillon = Date.now();
     purgerReserve();
-    maillonsLibres.push({ t: Date.now(), pris: false });
+    maillonsLibres.push({ t: Date.now(), id: id || null, pris: false });
     if (maillonsLibres.length > 10000) maillonsLibres.shift();
   }
 
@@ -862,12 +857,16 @@
      ne creditait rien. Une bombe arrivant dans la demi-minute apres une autre
      pouvait ainsi compter zero — c-est le « subgift juste derriere qui ne
      compte pas ». */
+  var dernierIdImpute = null;   // identifiant de bombe des maillons revendiques
+
   function imputerAuRecap(n, tRecap) {
     purgerReserve();
     var debut = tRecap - TOLERANCE_AVANT, pris = 0, i;
+    dernierIdImpute = null;
     for (i = 0; i < maillonsLibres.length && pris < n; i++) {
       if (!maillonsLibres[i].pris && maillonsLibres[i].t >= debut) {
         maillonsLibres[i].pris = true;
+        if (!dernierIdImpute) dernierIdImpute = maillonsLibres[i].id;
         pris++;
       }
     }
@@ -875,15 +874,28 @@
   }
 
   /* Un maillon a-t-il deja ete paye par le solde d-un recapitulatif ? */
-  function dejaPayeParSolde() {
-    if (avancePayee > 0 && Date.now() < avanceJusqua) {
-      avancePayee--;
-      var t = Date.now();
-      dernierMaillon = t;                  // un solde en attente doit patienter
-      avanceJusqua = t + FENETRE_AVANCE;   // fenetre glissante
-      return true;
+  /* L-avance est LIEE a l-identifiant de la bombe qu-elle couvre. Les
+     maillons d-une meme bombe partagent leur `_id` : un maillon portant un
+     autre identifiant appartient forcement a une AUTRE bombe, et ne doit pas
+     etre absorbe.
+
+     Sans ce lien, l-avance avalait n-importe quel gift suivant : une bombe
+     livree sans recapitulatif juste apres un rattrapage disparaissait
+     entierement — cinq subs offerts, zero compte. */
+  function dejaPayeParSolde(id) {
+    if (avancePayee <= 0 || Date.now() >= avanceJusqua) return false;
+
+    if (avanceId && id && String(id) !== String(avanceId)) {
+      L(C_SKIP, '     avance residuelle abandonnee : ce sub vient d-une autre bombe');
+      avancePayee = 0; avanceJusqua = 0; avanceId = null;
+      return false;
     }
-    return false;
+
+    avancePayee--;
+    var t = Date.now();
+    dernierMaillon = t;                  // un solde en attente doit patienter
+    avanceJusqua = t + FENETRE_AVANCE;   // fenetre glissante
+    return true;
   }
 
   /* Recapitulatif : on note, on attend, on ne paie que le manque. */
@@ -891,6 +903,19 @@
     var nom  = data.sender || data.name || '?';
     var tier = tierOf(data);
     var n    = Math.max(1, parseInt(data.amount, 10) || 1);
+
+    /* Une nouvelle bombe annule l-avance de la precedente : celle-ci est
+       terminee, et son avance residuelle absorberait a tort les subs de
+       celle-ci. Sans cette regle, un community gift suivi d-un autre gift
+       faisait disparaitre les subs du second a l-ecran — ils ne comptaient
+       plus un par un, ils tombaient d-un bloc au solde suivant. */
+    if (avancePayee > 0) {
+      L(C_SKIP, '     avance residuelle de la bombe precedente abandonnee (' +
+                avancePayee + ' non livre' + (avancePayee > 1 ? 's' : '') + ')');
+      avancePayee = 0;
+      avanceJusqua = 0;
+      avanceId = null;
+    }
 
     L(C_TITLE, 'GIFT BOMB · ' + nom + ' annonce ' + n + ' sub' + (n > 1 ? 's' : ''));
     L(C_INFO, '     les maillons sont credites un par un des leur arrivee · ' +
@@ -928,8 +953,19 @@
                  ' maillons livres → les ' + manque + ' manquants sont credites');
       L(C_INFO, '     → ' + Math.round(secSub) + ' s et ' + ptsSub + ' pt');
 
-      avancePayee += manque;                        // au cas ou ils arrivent en retard
-      avanceJusqua = Date.now() + FENETRE_AVANCE;
+      /* On n-ouvre une avance QUE si l-on sait quels maillons elle couvre.
+         Quand aucun n-est arrive — community gift pur — il n-y a aucun
+         identifiant a reconnaitre, et une avance aveugle avalerait le premier
+         gift venu. On n-en ouvre donc pas : le risque residuel devient un
+         double comptage si les maillons arrivaient tres tard, ce qui ne
+         s-observe pas apres un silence complet. */
+      if (dernierIdImpute) {
+        avancePayee += manque;
+        avanceId = dernierIdImpute;
+        avanceJusqua = Date.now() + FENETRE_AVANCE;
+      } else {
+        L(C_SKIP, '     aucune avance ouverte : aucun sub de cette bombe n-etait arrive');
+      }
 
       addTime(secSub);
       addPoints(ptsSub);
@@ -966,8 +1002,21 @@
      La relivraison immediate par StreamElements reste couverte, mais par une
      comparaison purement locale et tres courte : voir relivraisonRecap(). */
   function idEvent(listener, data) {
-    if (data && data._id) return listener + '|' + data._id;
-    return null;
+    if (!data || !data._id) return null;
+
+    /* Les maillons d-une gift bomb partagent TOUS le meme `_id` : c-est celui
+       de la bombe, pas du sub. Constate en production — cinq subs offerts par
+       le meme gifteur portaient un identifiant identique, et quatre d-entre
+       eux etaient jetes comme doublons.
+
+       Ce qui les distingue est le DESTINATAIRE. On l-ajoute donc a la cle.
+       Une vraie relivraison porte le meme `_id` ET le meme destinataire :
+       elle reste attrapee. Deux subs offerts a deux personnes differentes ne
+       peuvent plus se confondre. */
+    if (listener === 'subscriber-latest') {
+      return listener + '|' + data._id + '|' + String(data.name || '');
+    }
+    return listener + '|' + data._id;
   }
 
   /* Garde anti-relivraison, locale et bornee a 1,5 s. On ne compare que
@@ -1068,11 +1117,11 @@
          deja ete paye par le solde d-un recapitulatif, cas anormal ou Twitch
          avait livre moins de maillons qu-annonce. */
       if (data.isCommunityGift === true) {
-        if (dejaPayeParSolde()) {
+        if (dejaPayeParSolde(data._id)) {
           L(C_SKIP, '     ignore : deja paye par le solde d-un recapitulatif');
           return;
         }
-        noterMaillon();
+        noterMaillon(data._id);
       }
 
       var factorT = gifted ? F.giftTimeFactor : 1;
@@ -1506,15 +1555,39 @@
        deja credite et le manque vaut zero. Il n-existe que pour le cas ou les
        maillons ne viennent pas du tout.
 
-       Mais la distribution des subs prend un temps VARIABLE cote Twitch. Un
-       seuil trop court risquerait de solder au milieu d-une distribution
-       lente, puis de recompter les retardataires. On prend donc large : le
-       cout d-un seuil genereux est nul en production, celui d-un seuil trop
-       court est un comptage faux. */
-    F.soldeSilence = num(F.soldeSilence, 30);
-    if (F.soldeSilence < 5) F.soldeSilence = 5;
+       CE REGLAGE DOIT DEPASSER L-ECART ENTRE DEUX SUBS LIVRES.
+
+       StreamElements egrene les subs au rythme de sa file d-alertes : si une
+       alerte dure 6 s, les subs arrivent toutes les 6 s. Un reglage plus
+       court conclut AVANT l-arrivee du premier, paie tout le lot d-un bloc,
+       et les vrais subs qui suivent sont absorbes — le chrono saute d-un coup
+       au lieu de monter progressivement. Le total reste juste, l-affichage
+       non.
+
+       Mesure : a 3 s, aucun des 5 subs d-une bombe livree toutes les 6 s
+       n-est affiche au fil de l-eau ; a 10 s, les 5 le sont.
+
+       Regle pratique : prendre au moins le double de la duree d-une alerte.
+
+       Le monter reste sans danger — il ne fait que retarder un filet de
+       securite. Le descendre sous ~8 s expose au risque de solder au milieu
+       d-une distribution lente, puis de recompter les retardataires. */
+    F.soldeSilence = num(F.soldeSilence, 10);
+    if (F.soldeSilence < 2) F.soldeSilence = 2;
     SILENCE_REQUIS = F.soldeSilence * 1000;
-    FENETRE_AVANCE = SILENCE_REQUIS * 2;
+    DELAI_RECAP    = SILENCE_REQUIS;
+
+    /* L-avance NE suit PAS le reglage : elle garde un plancher de 30 s.
+
+       StreamElements livre les subs au rythme de sa file d-alertes, souvent
+       un toutes les 5 a 8 secondes. Une avance calee sur un reglage court —
+       6 s pour un reglage a 3 — laisserait sortir les retardataires de sa
+       fenetre, et ils seraient comptes une seconde fois.
+
+       Elle reste bornee par son compteur : elle ne peut absorber que ce qui a
+       ete paye d-avance, et s-epuise a mesure. La rallonger ne peut donc pas
+       faire perdre de temps, seulement mal l-imputer. */
+    FENETRE_AVANCE = Math.max(30000, SILENCE_REQUIS * 2);
 
     var s = el.root.style;
     s.setProperty('--scale', F.scale);
@@ -2011,7 +2084,9 @@
                 (num(F.followsMaxPerHour, 0) > 0
                   ? ' · plafond ' + F.followsMaxPerHour + '/h' : ' · sans plafond') +
                 ' · un même viewer n\'est compté qu\'une fois');
-      L(C_INFO, 'gift bombs : le recapitulatif est credite immediatement, les events individuels qui suivent sont absorbes');
+      L(C_INFO, 'gift bombs : chaque sub offert compte des son arrivee · le ' +
+                'recapitulatif ne paie que le manque, apres ' + F.soldeSilence +
+                ' s sans nouveau sub');
       L(C_INFO, 'commandes chat : ' + (F.commandsEnabled === 'off' ? 'désactivées'
                 : (F.commandsWho === 'ownerAndMods' ? 'streameuse + modérateurs'
                                                     : 'streameuse UNIQUEMENT')) +
